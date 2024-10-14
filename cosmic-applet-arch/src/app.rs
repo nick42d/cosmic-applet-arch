@@ -127,14 +127,20 @@ impl Application for CosmicAppArch {
     /// To get a better sense of which widgets are available, check out the
     /// `widget` module.
     fn view(&self) -> Element<Self::Message> {
-        let text = self.core.applet.text("123");
-        let icon = self
-            .core
-            .applet
-            .icon_button(self.icon.to_str())
-            .on_press(Message::TogglePopup);
-        let compose = widget::row().push(text).push(icon);
-        widget::button::custom(compose).into()
+        match self.updates_text.as_ref() {
+            Some(u) => {
+                cosmic::widget::button::custom(self.core.applet.text(format!("{}", u.len())))
+                    .on_press_down(Message::TogglePopup)
+                    .style(cosmic::theme::Button::AppletIcon)
+                    .into()
+            }
+            None => self
+                .core
+                .applet
+                .icon_button(self.icon.to_str())
+                .on_press(Message::TogglePopup)
+                .into(),
+        }
     }
 
     fn view_window(&self, _id: Id) -> Element<Self::Message> {
@@ -149,7 +155,8 @@ impl Application for CosmicAppArch {
             ));
         let content_list = match &self.updates_text {
             Some(updates) => {
-                for update in updates {
+                // Only show the first 5 - avoid massive list
+                for update in updates.iter().take(5) {
                     content_list = content_list.add(cosmic::widget::text(update));
                 }
                 content_list
