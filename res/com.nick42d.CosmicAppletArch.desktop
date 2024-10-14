@@ -1,12 +1,12 @@
 [Desktop Entry]
-Name=COSMIC Applet Template
-Exec=cosmic-applet-template %F
+Name=COSMIC Applet Arch
+Exec=cosmic-applet-arch %F
 Terminal=false
 Type=Application
 StartupNotify=true
-Icon=com.example.CosmicAppletTemplate
+Icon=com.nick42d.CosmicAppletArch
 Categories=COSMIC;Utility;
-Keywords=Folder;Manager;
+Keywords=Arch;Package;
 MimeType=inode/directory;
 NoDisplay=true
 X-CosmicApplet=true

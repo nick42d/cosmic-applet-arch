@@ -1,0 +1,11 @@
+[package]
+name = "arch-updates-rs"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+thiserror = "1.0.64"
+tokio = { version = "1.40.0", features = ["process"] }
+
+[dev-dependencies]
+tokio = { version = "1.40.0", features = ["macros", "rt"] }

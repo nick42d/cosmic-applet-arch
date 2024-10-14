@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
+use std::time::Duration;
+
+use ::tokio::time::sleep;
+use arch_updates_rs::{CheckType, Update};
 use cosmic::app::{Command, Core};
-use cosmic::cosmic_theme::palette::angle::IntoAngle;
+use cosmic::iced::futures::SinkExt;
 use cosmic::iced::wayland::popup::{destroy_popup, get_popup};
 use cosmic::iced::window::Id;
 use cosmic::iced::Limits;
@@ -23,6 +27,7 @@ pub struct CosmicAppArch {
     example_row: bool,
     //ADDED BY NICK42D
     icon: AppIcon,
+    updates_text: Option<Vec<String>>,
 }
 
 #[derive(Default)]
@@ -47,23 +52,28 @@ impl AppIcon {
     }
 }
 
-/// This is the enum that contains all the possible variants that your application will need to transmit messages.
-/// This is used to communicate between the different parts of your application.
-/// If your application does not need to send messages, you can use an empty enum or `()`.
+/// This is the enum that contains all the possible variants that your
+/// application will need to transmit messages. This is used to communicate
+/// between the different parts of your application. If your application does
+/// not need to send messages, you can use an empty enum or `()`.
 #[derive(Debug, Clone)]
 pub enum Message {
     TogglePopup,
     PopupClosed(Id),
     ToggleExampleRow(bool),
+    CheckUpdatesMsg(Vec<arch_updates_rs::Update>),
 }
 
 /// Implement the `Application` trait for your application.
 /// This is where you define the behavior of your application.
 ///
-/// The `Application` trait requires you to define the following types and constants:
-/// - `Executor` is the async executor that will be used to run your application's commands.
+/// The `Application` trait requires you to define the following types and
+/// constants:
+/// - `Executor` is the async executor that will be used to run your
+///   application's commands.
 /// - `Flags` is the data that your application needs to use before it starts.
-/// - `Message` is the enum that contains all the possible variants that your application will need to transmit messages.
+/// - `Message` is the enum that contains all the possible variants that your
+///   application will need to transmit messages.
 /// - `APP_ID` is the unique identifier of your application.
 impl Application for CosmicAppArch {
     type Executor = cosmic::executor::Default;
@@ -82,13 +92,18 @@ impl Application for CosmicAppArch {
         &mut self.core
     }
 
-    /// This is the entry point of your application, it is where you initialize your application.
+    /// This is the entry point of your application, it is where you initialize
+    /// your application.
     ///
-    /// Any work that needs to be done before the application starts should be done here.
+    /// Any work that needs to be done before the application starts should be
+    /// done here.
     ///
-    /// - `core` is used to passed on for you by libcosmic to use in the core of your own application.
-    /// - `flags` is used to pass in any data that your application needs to use before it starts.
-    /// - `Command` type is used to send messages to your application. `Command::none()` can be used to send no messages to your application.
+    /// - `core` is used to passed on for you by libcosmic to use in the core of
+    ///   your own application.
+    /// - `flags` is used to pass in any data that your application needs to use
+    ///   before it starts.
+    /// - `Command` type is used to send messages to your application.
+    ///   `Command::none()` can be used to send no messages to your application.
     fn init(core: Core, _flags: Self::Flags) -> (Self, Command<Self::Message>) {
         let app = CosmicAppArch {
             core,
@@ -102,12 +117,15 @@ impl Application for CosmicAppArch {
         Some(Message::PopupClosed(id))
     }
 
-    /// This is the main view of your application, it is the root of your widget tree.
+    /// This is the main view of your application, it is the root of your widget
+    /// tree.
     ///
-    /// The `Element` type is used to represent the visual elements of your application,
-    /// it has a `Message` associated with it, which dictates what type of message it can send.
+    /// The `Element` type is used to represent the visual elements of your
+    /// application, it has a `Message` associated with it, which dictates
+    /// what type of message it can send.
     ///
-    /// To get a better sense of which widgets are available, check out the `widget` module.
+    /// To get a better sense of which widgets are available, check out the
+    /// `widget` module.
     fn view(&self) -> Element<Self::Message> {
         let text = self.core.applet.text("123");
         let icon = self
@@ -120,7 +138,7 @@ impl Application for CosmicAppArch {
     }
 
     fn view_window(&self, _id: Id) -> Element<Self::Message> {
-        let content_list = widget::list_column()
+        let mut content_list = widget::list_column()
             .padding(5)
             .spacing(0)
             .add(settings::item(
@@ -128,15 +146,23 @@ impl Application for CosmicAppArch {
                 widget::toggler(None, self.example_row, |value| {
                     Message::ToggleExampleRow(value)
                 }),
-            ))
-            .add(cosmic::widget::text("Updates go here"));
-
+            ));
+        let content_list = match &self.updates_text {
+            Some(updates) => {
+                for update in updates {
+                    content_list = content_list.add(cosmic::widget::text(update));
+                }
+                content_list
+            }
+            None => content_list.add(cosmic::widget::text("No updates")),
+        };
         self.core.applet.popup_container(content_list).into()
     }
 
-    /// Application messages are handled here. The application state can be modified based on
-    /// what message was received. Commands may be returned for asynchronous execution on a
-    /// background thread managed by the application's executor.
+    /// Application messages are handled here. The application state can be
+    /// modified based on what message was received. Commands may be
+    /// returned for asynchronous execution on a background thread managed
+    /// by the application's executor.
     fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
         match message {
             Message::TogglePopup => {
@@ -164,6 +190,9 @@ impl Application for CosmicAppArch {
                 }
             }
             Message::ToggleExampleRow(toggled) => self.example_row = toggled,
+            Message::CheckUpdatesMsg(vec) => {
+                self.updates_text = Some(vec.into_iter().map(update_to_string).collect())
+            }
         }
         Command::none()
     }
@@ -171,4 +200,33 @@ impl Application for CosmicAppArch {
     fn style(&self) -> Option<<Theme as application::StyleSheet>::Style> {
         Some(cosmic::applet::style())
     }
+
+    fn subscription(&self) -> cosmic::iced::Subscription<Self::Message> {
+        const INTERVAL: Duration = Duration::from_secs(6);
+        const CYCLES: usize = 600;
+        const BUF_SIZE: usize = 10;
+        cosmic::iced::subscription::channel(0, BUF_SIZE, |mut tx| async move {
+            let mut counter = 0;
+            loop {
+                let check_type = match counter {
+                    0 => CheckType::Online,
+                    _ => CheckType::Offline,
+                };
+                let output = arch_updates_rs::check_updates(check_type).await.unwrap();
+                tx.send(Message::CheckUpdatesMsg(output)).await.unwrap();
+                counter += 1;
+                if counter > CYCLES {
+                    counter = 0
+                }
+                sleep(INTERVAL).await;
+            }
+        })
+    }
+}
+
+fn update_to_string(update: Update) -> String {
+    format!(
+        "{} {}-{}->{}-{}",
+        update.pkgname, update.pkgver_cur, update.pkgrel_cur, update.pkgver_new, update.pkgrel_new
+    )
 }

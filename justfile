@@ -1,5 +1,5 @@
-name := 'cosmic-applet-template'
-export APPID := 'com.example.CosmicAppletTemplate'
+name := 'cosmic-applet-arch'
+export APPID := 'com.nick42d.CosmicAppletArch'
 
 rootdir := ''
 prefix := '/usr'
