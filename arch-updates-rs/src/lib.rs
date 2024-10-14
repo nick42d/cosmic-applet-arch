@@ -1,10 +1,11 @@
 use core::str;
+use std::{io::Stdout, process::Stdio};
 use thiserror::Error;
-use tokio::process::Command;
+use tokio::{process::Command};
 
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("checkupdates failed")]
+    #[error("IO error running command")]
     Io(#[from] std::io::Error),
     // #[error("the data for key `{0}` is not available")]
     // Redaction(String),
@@ -17,6 +18,8 @@ pub enum Error {
     // Unknown,
     #[error("Failed to parse update from checkupdates")]
     CheckUpdatesParseFailed,
+    #[error("Failed to get ignored packages")]
+    GetIgnoredPackagesFailed,
 }
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -32,6 +35,12 @@ pub struct Update {
     pub pkgrel_cur: String,
     pub pkgver_new: String,
     pub pkgrel_new: String,
+}
+
+pub struct Package {
+    pub pkgname: String,
+    pub pkgver: String,
+    pub pkgrel: String,
 }
 
 impl TryFrom<&str> for Update {
@@ -74,7 +83,43 @@ pub async fn check_updates(check_type: CheckType) -> Result<Vec<Update>> {
         .map_err(|_| Error::CheckUpdatesParseFailed)?
         .lines()
         .map(TryInto::try_into)
-        .collect::<Result<Vec<_>>>()
+        .collect()
+}
+
+async fn get_ignored_packages() -> Result<Vec<String>> {
+    let output = Command::new("pacman-conf").arg("IgnorePkg").output().await?;
+    Ok(str::from_utf8(output.stdout.as_slice())
+                .map_err(|_| Error::GetIgnoredPackagesFailed)?
+                .lines()
+                .map(ToString::to_string)
+                .collect())
+}
+
+async fn get_old_aur_packages() -> Result<Vec<String>> {
+    let ignored_packages = get_ignored_packages().await?;
+    let output = if ignored_packages.is_empty() {
+    Command::new("pacman") 
+        .arg("-Qm")
+        .output()
+        .await?
+    } else {
+    let parent = Command::new("pacman") 
+        .arg("-Qm")
+        .stdout(Stdio::piped())
+        .spawn()?;
+    Command::new("grep") 
+        .arg("-vF")
+        // TODO: Remove unwrap
+        .stdin(Stdio::from(parent.stdout.unwrap()))
+        .args(ignored_packages)
+        .output()
+        .await?
+    };
+    Ok(str::from_utf8(output.stdout.as_slice())
+                .map_err(|_| Error::GetIgnoredPackagesFailed)?
+                .lines()
+                .map(ToString::to_string)
+                .collect())
 }
 
 #[cfg(test)]
