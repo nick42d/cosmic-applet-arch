@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use cosmic::app::{Command, Core};
+use cosmic::cosmic_theme::palette::angle::IntoAngle;
 use cosmic::iced::wayland::popup::{destroy_popup, get_popup};
 use cosmic::iced::window::Id;
 use cosmic::iced::Limits;
@@ -13,13 +14,37 @@ use crate::fl;
 /// This is the struct that represents your application.
 /// It is used to define the data that will be used by your application.
 #[derive(Default)]
-pub struct YourApp {
+pub struct CosmicAppArch {
     /// Application state which is managed by the COSMIC runtime.
     core: Core,
     /// The popup id.
     popup: Option<Id>,
     /// Example row toggler.
     example_row: bool,
+    //ADDED BY NICK42D
+    icon: AppIcon,
+}
+
+#[derive(Default)]
+enum AppIcon {
+    #[default]
+    UpdatesAvailable,
+    UpToDate,
+}
+
+impl AppIcon {
+    fn to_str(&self) -> &'static str {
+        match self {
+            AppIcon::UpdatesAvailable => "software-update-available-symbolic",
+            AppIcon::UpToDate => "emblem-default-symbolic",
+        }
+    }
+    fn toggle(&self) -> Self {
+        match self {
+            AppIcon::UpdatesAvailable => AppIcon::UpToDate,
+            AppIcon::UpToDate => AppIcon::UpdatesAvailable,
+        }
+    }
 }
 
 /// This is the enum that contains all the possible variants that your application will need to transmit messages.
@@ -40,14 +65,14 @@ pub enum Message {
 /// - `Flags` is the data that your application needs to use before it starts.
 /// - `Message` is the enum that contains all the possible variants that your application will need to transmit messages.
 /// - `APP_ID` is the unique identifier of your application.
-impl Application for YourApp {
+impl Application for CosmicAppArch {
     type Executor = cosmic::executor::Default;
 
     type Flags = ();
 
     type Message = Message;
 
-    const APP_ID: &'static str = "com.example.CosmicAppletTemplate";
+    const APP_ID: &'static str = "com.nick42d.CosmicAppletArch";
 
     fn core(&self) -> &Core {
         &self.core
@@ -65,7 +90,7 @@ impl Application for YourApp {
     /// - `flags` is used to pass in any data that your application needs to use before it starts.
     /// - `Command` type is used to send messages to your application. `Command::none()` can be used to send no messages to your application.
     fn init(core: Core, _flags: Self::Flags) -> (Self, Command<Self::Message>) {
-        let app = YourApp {
+        let app = CosmicAppArch {
             core,
             ..Default::default()
         };
@@ -84,11 +109,14 @@ impl Application for YourApp {
     ///
     /// To get a better sense of which widgets are available, check out the `widget` module.
     fn view(&self) -> Element<Self::Message> {
-        self.core
+        let text = self.core.applet.text("123");
+        let icon = self
+            .core
             .applet
-            .icon_button("display-symbolic")
-            .on_press(Message::TogglePopup)
-            .into()
+            .icon_button(self.icon.to_str())
+            .on_press(Message::TogglePopup);
+        let compose = widget::row().push(text).push(icon);
+        widget::button::custom(compose).into()
     }
 
     fn view_window(&self, _id: Id) -> Element<Self::Message> {
@@ -100,7 +128,8 @@ impl Application for YourApp {
                 widget::toggler(None, self.example_row, |value| {
                     Message::ToggleExampleRow(value)
                 }),
-            ));
+            ))
+            .add(cosmic::widget::text("Updates go here"));
 
         self.core.applet.popup_container(content_list).into()
     }
@@ -111,6 +140,7 @@ impl Application for YourApp {
     fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
         match message {
             Message::TogglePopup => {
+                self.icon = self.icon.toggle();
                 return if let Some(p) = self.popup.take() {
                     destroy_popup(p)
                 } else {
@@ -126,7 +156,7 @@ impl Application for YourApp {
                         .min_height(200.0)
                         .max_height(1080.0);
                     get_popup(popup_settings)
-                }
+                };
             }
             Message::PopupClosed(id) => {
                 if self.popup.as_ref() == Some(&id) {
