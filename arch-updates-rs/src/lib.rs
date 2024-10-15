@@ -1,25 +1,19 @@
 use core::str;
+use raur::Raur;
 use std::{io::Stdout, process::Stdio};
 use thiserror::Error;
-use tokio::{process::Command};
+use tokio::process::Command;
 
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("IO error running command")]
     Io(#[from] std::io::Error),
-    // #[error("the data for key `{0}` is not available")]
-    // Redaction(String),
-    // #[error("invalid header (expected {expected:?}, found {found:?})")]
-    // InvalidHeader {
-    //     expected: String,
-    //     found: String,
-    // },
-    // #[error("unknown data store error")]
-    // Unknown,
     #[error("Failed to parse update from checkupdates")]
     CheckUpdatesParseFailed,
     #[error("Failed to get ignored packages")]
     GetIgnoredPackagesFailed,
+    #[error("Failed to get new aur packages")]
+    GetNewAurPackagesFailed,
 }
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -87,39 +81,42 @@ pub async fn check_updates(check_type: CheckType) -> Result<Vec<Update>> {
 }
 
 async fn get_ignored_packages() -> Result<Vec<String>> {
-    let output = Command::new("pacman-conf").arg("IgnorePkg").output().await?;
+    // Considered pacmanconf crate here, but it's sync, and does the same thing
+    // under the hood (runs pacman-conf) as a Command.
+    let output = Command::new("pacman-conf")
+        .arg("IgnorePkg")
+        .output()
+        .await?;
     Ok(str::from_utf8(output.stdout.as_slice())
-                .map_err(|_| Error::GetIgnoredPackagesFailed)?
-                .lines()
-                .map(ToString::to_string)
-                .collect())
+        .map_err(|_| Error::GetIgnoredPackagesFailed)?
+        .lines()
+        .map(ToString::to_string)
+        .collect())
 }
 
 async fn get_old_aur_packages() -> Result<Vec<String>> {
-    let ignored_packages = get_ignored_packages().await?;
-    let output = if ignored_packages.is_empty() {
-    Command::new("pacman") 
-        .arg("-Qm")
-        .output()
-        .await?
-    } else {
-    let parent = Command::new("pacman") 
-        .arg("-Qm")
-        .stdout(Stdio::piped())
-        .spawn()?;
-    Command::new("grep") 
-        .arg("-vF")
-        // TODO: Remove unwrap
-        .stdin(Stdio::from(parent.stdout.unwrap()))
-        .args(ignored_packages)
-        .output()
-        .await?
-    };
-    Ok(str::from_utf8(output.stdout.as_slice())
-                .map_err(|_| Error::GetIgnoredPackagesFailed)?
-                .lines()
-                .map(ToString::to_string)
-                .collect())
+    let (ignored_packages, output) = tokio::join!(
+        get_ignored_packages(),
+        Command::new("pacman").arg("-Qm").output()
+    );
+    let ignored_packages = ignored_packages?;
+    Ok(str::from_utf8(output?.stdout.as_slice())
+        .map_err(|_| Error::GetIgnoredPackagesFailed)?
+        .lines()
+        .filter(|line| {
+            ignored_packages
+                .iter()
+                .any(|ignored_package| line.contains(ignored_package))
+        })
+        .map(ToString::to_string)
+        .collect())
+}
+
+async fn get_new_aur_packages(old_packages: Vec<String>) -> Result<Vec<raur::Package>> {
+    let aur = raur::Handle::new();
+    aur.info(old_packages.as_slice())
+        .await
+        .map_err(|_| Error::GetNewAurPackagesFailed)
 }
 
 #[cfg(test)]
