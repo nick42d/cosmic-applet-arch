@@ -142,9 +142,19 @@ impl Application for CosmicAppArch {
         } else {
             self.core
                 .applet
-                .icon_button(self.icon.to_str())
+                .icon_button_from_handle(
+                    cosmic::widget::icon::from_name(self.icon.to_str())
+                        .symbolic(true)
+                        .size(self.core.applet.suggested_size(true).0)
+                        .into(),
+                )
                 .on_press(Message::TogglePopup)
                 .into()
+            // self.core
+            //     .applet
+            //     .icon_button(self.icon.to_str())
+            //     .on_press(Message::TogglePopup)
+            //     .into()
         }
     }
 
