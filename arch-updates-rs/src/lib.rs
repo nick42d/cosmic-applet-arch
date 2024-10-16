@@ -1,6 +1,7 @@
 use core::str;
 use raur::Raur;
-use std::{io::Stdout, process::Stdio};
+use srcinfo::Srcinfo;
+use std::{collections::HashMap, io::Stdout, process::Stdio, str::FromStr};
 use thiserror::Error;
 use tokio::process::Command;
 
@@ -146,41 +147,69 @@ async fn get_devel_packages() -> Result<Vec<String>> {
         .collect())
 }
 
-async fn get_pkgbuild(pkgname: String) -> Result<Vec<String>> {
-    let custom_pkgbuild_vars = [
-        "_gitname=",
-        "_githubuser=",
-        "_githubrepo=",
-        "_gitcommit=",
-        "url=",
-        "_pkgname=",
-        "_gitdir=",
-        "_repo_name=",
-        "_gitpkgname=",
-        "source_dir=",
-        "_name=",
-    ];
+async fn get_aur_pkgbuild(pkgname: String) -> Result<String> {
     let url = format!("https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h={pkgname}");
-    Ok(reqwest::get(url)
-        .await
-        .unwrap()
-        .text()
-        .await
-        .unwrap()
-        .lines()
-        .filter(|line| {
-            custom_pkgbuild_vars
-                .iter()
-                .any(|var| line.to_lowercase().contains(var))
-        })
-        .map(ToString::to_string)
-        .collect())
+    Ok(reqwest::get(url).await.unwrap().text().await.unwrap())
+}
+
+async fn get_aur_srcinfo(pkgname: String) -> Result<Srcinfo> {
+    let url = format!("https://aur.archlinux.org/cgit/aur.git/plain/.SRCINFO?h={pkgname}");
+    let raw = reqwest::get(url).await.unwrap().text().await.unwrap();
+    Ok(Srcinfo::from_str(&raw).unwrap())
+}
+
+async fn get_head(url: String, branch: Option<&str>) -> String {
+    str::from_utf8(
+        Command::new("git")
+            .args(["ls-remote", &url, branch.unwrap_or("HEAD")])
+            .output()
+            .await
+            .unwrap()
+            .stdout
+            .as_ref(),
+    )
+    .unwrap()
+    .to_string()
+}
+
+// This is from paru (GPL3)
+fn parse_url(source: &str) -> Option<(String, &str, Option<&str>)> {
+    let url = source.splitn(2, "::").last().unwrap();
+
+    if !url.starts_with("git") || !url.contains("://") {
+        return None;
+    }
+
+    let mut split = url.splitn(2, "://");
+    let protocol = split.next().unwrap();
+    let protocol = protocol.rsplit('+').next().unwrap();
+    let rest = split.next().unwrap();
+
+    let mut split = rest.splitn(2, '#');
+    let remote = split.next().unwrap();
+    let remote = remote.split_once('?').map_or(remote, |x| x.0);
+    let remote = format!("{}://{}", protocol, remote);
+
+    let branch = if let Some(fragment) = split.next() {
+        let fragment = fragment.split_once('?').map_or(fragment, |x| x.0);
+        let mut split = fragment.splitn(2, '=');
+        let frag_type = split.next().unwrap();
+
+        match frag_type {
+            "commit" | "tag" => return None,
+            "branch" => split.next(),
+            _ => None,
+        }
+    } else {
+        None
+    };
+
+    Some((remote, protocol, branch))
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{check_updates, get_pkgbuild, CheckType, Update};
-    use raur::Raur;
+    use crate::{check_updates, get_aur_srcinfo, get_head, parse_url, CheckType, Update};
 
     #[tokio::test]
     async fn test_check_updates() {
@@ -189,13 +218,23 @@ mod tests {
         assert_eq!(online, offline);
     }
     #[tokio::test]
-    async fn test_download() {
-        // let out = raur::Handle::new()
-        //     .raw_info(&["hyprlang-git"])
-        //     .await
-        //     .unwrap();
-        let out = get_pkgbuild("hyprlang-git".to_string()).await.unwrap();
-        eprintln!("{:?}", out)
+    async fn test_get_srcinfo() {
+        get_aur_srcinfo("hyprlang-git".to_string()).await.unwrap();
+    }
+    #[tokio::test]
+    async fn test_get_url() {
+        let srcinfo = get_aur_srcinfo("hyprlang-git".to_string()).await.unwrap();
+        let url = srcinfo.base.source.first().unwrap().vec.first().unwrap();
+        let x = parse_url(url).unwrap();
+        eprintln!("{:?}", x)
+    }
+    #[tokio::test]
+    async fn test_get_head() {
+        let srcinfo = get_aur_srcinfo("hyprlang-git".to_string()).await.unwrap();
+        let url = srcinfo.base.source.first().unwrap().vec.first().unwrap();
+        let url_parsed = parse_url(url).unwrap();
+        let x = get_head(url_parsed.0, url_parsed.2).await;
+        eprintln!("{}", x)
     }
 
     #[test]

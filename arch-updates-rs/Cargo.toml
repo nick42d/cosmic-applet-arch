@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 raur = "7.0.0"
 reqwest = "0.12.8"
+srcinfo = "1.1.0"
 thiserror = "1.0.64"
 tokio = { version = "1.40.0", features = ["process"] }
 
