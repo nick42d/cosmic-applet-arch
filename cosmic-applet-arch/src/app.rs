@@ -217,7 +217,7 @@ impl Application for CosmicAppArch {
             loop {
                 let check_type = match counter {
                     0 => CheckType::Online,
-                    _ => CheckType::Offline,
+                    _ => CheckType::Offline(()),
                 };
                 let output = arch_updates_rs::check_updates(check_type).await.unwrap();
                 tx.send(Message::CheckUpdatesMsg(output)).await.unwrap();

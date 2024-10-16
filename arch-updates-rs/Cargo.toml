@@ -4,11 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+futures = "0.3.31"
 raur = "7.0.0"
 reqwest = "0.12.8"
 srcinfo = "1.1.0"
 thiserror = "1.0.64"
 tokio = { version = "1.40.0", features = ["process"] }
+version-compare = "0.2.0"
 
 [dev-dependencies]
 tokio = { version = "1.40.0", features = ["macros", "rt"] }
