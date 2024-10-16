@@ -103,6 +103,7 @@ async fn get_old_aur_packages() -> Result<Vec<String>> {
     Ok(str::from_utf8(output?.stdout.as_slice())
         .map_err(|_| Error::GetIgnoredPackagesFailed)?
         .lines()
+        // Filter out any ignored packages
         .filter(|line| {
             ignored_packages
                 .iter()
@@ -119,15 +120,82 @@ async fn get_new_aur_packages(old_packages: Vec<String>) -> Result<Vec<raur::Pac
         .map_err(|_| Error::GetNewAurPackagesFailed)
 }
 
+async fn get_devel_packages() -> Result<Vec<String>> {
+    const DEVEL_SUFFIXES: [&str; 1] = ["-git"];
+    let (ignored_packages, output_unfiltered) = tokio::join!(
+        get_ignored_packages(),
+        Command::new("pacman").arg("-Qm").output()
+    );
+    let ignored_packages = ignored_packages?;
+    Ok(str::from_utf8(output_unfiltered?.stdout.as_slice())
+        .map_err(|_| Error::GetIgnoredPackagesFailed)?
+        .lines()
+        // Only include packages with DEVEL_SUFFIXES.
+        .filter(|line| {
+            DEVEL_SUFFIXES
+                .iter()
+                .any(|suffix| line.to_lowercase().contains(suffix))
+        })
+        // Filter out any ignored packages
+        .filter(|line| {
+            ignored_packages
+                .iter()
+                .any(|ignored_package| line.contains(ignored_package))
+        })
+        .map(ToString::to_string)
+        .collect())
+}
+
+async fn get_pkgbuild(pkgname: String) -> Result<Vec<String>> {
+    let custom_pkgbuild_vars = [
+        "_gitname=",
+        "_githubuser=",
+        "_githubrepo=",
+        "_gitcommit=",
+        "url=",
+        "_pkgname=",
+        "_gitdir=",
+        "_repo_name=",
+        "_gitpkgname=",
+        "source_dir=",
+        "_name=",
+    ];
+    let url = format!("https://aur.archlinux.org/cgit/aur.git/plain/PKGBUILD?h={pkgname}");
+    Ok(reqwest::get(url)
+        .await
+        .unwrap()
+        .text()
+        .await
+        .unwrap()
+        .lines()
+        .filter(|line| {
+            custom_pkgbuild_vars
+                .iter()
+                .any(|var| line.to_lowercase().contains(var))
+        })
+        .map(ToString::to_string)
+        .collect())
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::{check_updates, CheckType, Update};
+    use crate::{check_updates, get_pkgbuild, CheckType, Update};
+    use raur::Raur;
 
     #[tokio::test]
     async fn test_check_updates() {
         let online = check_updates(CheckType::Online).await.unwrap();
         let offline = check_updates(CheckType::Offline).await.unwrap();
         assert_eq!(online, offline);
+    }
+    #[tokio::test]
+    async fn test_download() {
+        // let out = raur::Handle::new()
+        //     .raw_info(&["hyprlang-git"])
+        //     .await
+        //     .unwrap();
+        let out = get_pkgbuild("hyprlang-git".to_string()).await.unwrap();
+        eprintln!("{:?}", out)
     }
 
     #[test]
