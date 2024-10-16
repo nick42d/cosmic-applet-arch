@@ -100,7 +100,7 @@ pub async fn check_updates(check_type: CheckType<()>) -> Result<Vec<Update>> {
 
 // TODO: Consider case where pkgrel has been bumped.
 /// (packages that have an update, cache of packages)
-async fn check_devel_updates(
+pub async fn check_devel_updates(
     check_type: CheckType<Vec<DevelUpdate>>,
 ) -> Result<(Vec<DevelUpdate>, Vec<DevelUpdate>)> {
     let devel_packages = get_devel_packages().await?;
@@ -162,7 +162,7 @@ async fn check_devel_updates(
 
 // TODO: Consider if devel packages should be filtered entirely.
 /// (packages that have an update, cache of packages)
-async fn check_aur_updates(
+pub async fn check_aur_updates(
     check_type: CheckType<Vec<Update>>,
 ) -> Result<(Vec<Update>, Vec<Update>)> {
     let old = get_old_aur_packages().await?;

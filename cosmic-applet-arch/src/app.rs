@@ -3,7 +3,7 @@
 use std::time::Duration;
 
 use ::tokio::time::sleep;
-use arch_updates_rs::{CheckType, Update};
+use arch_updates_rs::{CheckType, DevelUpdate, Update};
 use cosmic::app::{Command, Core};
 use cosmic::iced::futures::SinkExt;
 use cosmic::iced::wayland::popup::{destroy_popup, get_popup};
@@ -12,6 +12,7 @@ use cosmic::iced::Limits;
 use cosmic::iced_style::application;
 use cosmic::widget::{self, settings};
 use cosmic::{Application, Element, Theme};
+use tokio::join;
 
 use crate::fl;
 
@@ -27,7 +28,7 @@ pub struct CosmicAppArch {
     example_row: bool,
     //ADDED BY NICK42D
     icon: AppIcon,
-    updates_text: Option<Vec<String>>,
+    updates: Updates,
 }
 
 #[derive(Default)]
@@ -61,7 +62,7 @@ pub enum Message {
     TogglePopup,
     PopupClosed(Id),
     ToggleExampleRow(bool),
-    CheckUpdatesMsg(Vec<arch_updates_rs::Update>),
+    CheckUpdatesMsg(Updates),
 }
 
 /// Implement the `Application` trait for your application.
@@ -127,19 +128,23 @@ impl Application for CosmicAppArch {
     /// To get a better sense of which widgets are available, check out the
     /// `widget` module.
     fn view(&self) -> Element<Self::Message> {
-        match self.updates_text.as_ref() {
-            Some(u) => {
-                cosmic::widget::button::custom(self.core.applet.text(format!("{}", u.len())))
-                    .on_press_down(Message::TogglePopup)
-                    .style(cosmic::theme::Button::AppletIcon)
-                    .into()
-            }
-            None => self
-                .core
+        let pm = self.updates.pacman.len();
+        let au = self.updates.aur.len();
+        let dev = self.updates.devel.len();
+
+        let total_updates = pm + au + dev;
+
+        if total_updates > 0 {
+            cosmic::widget::button::custom(self.core.applet.text(format!("{pm}/{au}/{dev}")))
+                .on_press_down(Message::TogglePopup)
+                .style(cosmic::theme::Button::AppletIcon)
+                .into()
+        } else {
+            self.core
                 .applet
                 .icon_button(self.icon.to_str())
                 .on_press(Message::TogglePopup)
-                .into(),
+                .into()
         }
     }
 
@@ -153,15 +158,18 @@ impl Application for CosmicAppArch {
                     Message::ToggleExampleRow(value)
                 }),
             ));
-        let content_list = match &self.updates_text {
-            Some(updates) => {
-                // Only show the first 5 - avoid massive list
-                for update in updates.iter().take(5) {
-                    content_list = content_list.add(cosmic::widget::text(update));
-                }
-                content_list
-            }
-            None => content_list.add(cosmic::widget::text("No updates")),
+        let pm = self.updates.pacman.len();
+        let au = self.updates.aur.len();
+        let dev = self.updates.devel.len();
+
+        let total_updates = pm + au + dev;
+        let content_list = if total_updates > 0 {
+            content_list
+                .add(cosmic::widget::text(format!("Pacman updates: {pm}")))
+                .add(cosmic::widget::text(format!("Aur updates: {au}")))
+                .add(cosmic::widget::text(format!("Dev updates: {dev}")))
+        } else {
+            content_list.add(cosmic::widget::text("No updates available"))
         };
         self.core.applet.popup_container(content_list).into()
     }
@@ -197,8 +205,14 @@ impl Application for CosmicAppArch {
                 }
             }
             Message::ToggleExampleRow(toggled) => self.example_row = toggled,
-            Message::CheckUpdatesMsg(vec) => {
-                self.updates_text = Some(vec.into_iter().map(update_to_string).collect())
+            Message::CheckUpdatesMsg(updates) => {
+                let total = updates.pacman.len() + updates.aur.len() + updates.devel.len();
+                if total == 0 {
+                    self.icon = AppIcon::UpToDate
+                } else {
+                    self.icon = AppIcon::UpdatesAvailable
+                }
+                self.updates = updates;
             }
         }
         Command::none()
@@ -214,12 +228,14 @@ impl Application for CosmicAppArch {
         const BUF_SIZE: usize = 10;
         cosmic::iced::subscription::channel(0, BUF_SIZE, |mut tx| async move {
             let mut counter = 0;
+            let mut cache = CacheState::default();
             loop {
                 let check_type = match counter {
                     0 => CheckType::Online,
-                    _ => CheckType::Offline(()),
+                    _ => CheckType::Offline(cache),
                 };
-                let output = arch_updates_rs::check_updates(check_type).await.unwrap();
+                let (output, cache_tmp) = get_updates_all(check_type).await;
+                cache = cache_tmp;
                 tx.send(Message::CheckUpdatesMsg(output)).await.unwrap();
                 counter += 1;
                 if counter > CYCLES {
@@ -231,9 +247,66 @@ impl Application for CosmicAppArch {
     }
 }
 
-fn update_to_string(update: Update) -> String {
-    format!(
-        "{} {}-{}->{}-{}",
-        update.pkgname, update.pkgver_cur, update.pkgrel_cur, update.pkgver_new, update.pkgrel_new
-    )
+#[derive(Default)]
+struct CacheState {
+    aur_cache: Vec<Update>,
+    devel_cache: Vec<DevelUpdate>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct Updates {
+    pacman: Vec<Update>,
+    aur: Vec<Update>,
+    devel: Vec<DevelUpdate>,
+}
+
+async fn get_updates_all(check_type: CheckType<CacheState>) -> (Updates, CacheState) {
+    async fn get_updates_online() -> (Updates, CacheState) {
+        let (pacman, aur, devel) = join!(
+            arch_updates_rs::check_updates(CheckType::Online),
+            arch_updates_rs::check_aur_updates(CheckType::Online),
+            arch_updates_rs::check_devel_updates(CheckType::Online),
+        );
+        let (aur, aur_cache) = aur.unwrap();
+        let (devel, devel_cache) = devel.unwrap();
+        (
+            Updates {
+                pacman: pacman.unwrap(),
+                aur,
+                devel,
+            },
+            CacheState {
+                aur_cache,
+                devel_cache,
+            },
+        )
+    }
+    async fn get_updates_offline(cache: CacheState) -> (Updates, CacheState) {
+        let CacheState {
+            aur_cache,
+            devel_cache,
+        } = cache;
+        let (pacman, aur, devel) = join!(
+            arch_updates_rs::check_updates(CheckType::Offline(())),
+            arch_updates_rs::check_aur_updates(CheckType::Offline(aur_cache)),
+            arch_updates_rs::check_devel_updates(CheckType::Offline(devel_cache)),
+        );
+        let (aur, aur_cache) = aur.unwrap();
+        let (devel, devel_cache) = devel.unwrap();
+        (
+            Updates {
+                pacman: pacman.unwrap(),
+                aur,
+                devel,
+            },
+            CacheState {
+                aur_cache,
+                devel_cache,
+            },
+        )
+    }
+    match check_type {
+        CheckType::Online => get_updates_online().await,
+        CheckType::Offline(cache) => get_updates_offline(cache).await,
+    }
 }
