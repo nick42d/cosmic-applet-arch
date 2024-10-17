@@ -36,6 +36,7 @@ pub struct Update {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DevelUpdate {
+    // Consider adding pkgrel, even though not required for updating.
     pub pkgname: String,
     pub pkgver_cur: String,
     pub ref_id_new: String,

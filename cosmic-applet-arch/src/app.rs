@@ -1,9 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
-use std::num::NonZeroU32;
-use std::rc::Rc;
-use std::time::Duration;
-
 use ::tokio::time::sleep;
 use arch_updates_rs::{CheckType, DevelUpdate, Update};
 use cosmic::app::{Command, Core};
@@ -18,6 +14,10 @@ use cosmic::iced_style::application;
 use cosmic::theme::Button;
 use cosmic::widget::settings;
 use cosmic::{Application, Element, Theme};
+use itertools::Itertools;
+use std::num::NonZeroU32;
+use std::rc::Rc;
+use std::time::Duration;
 use tokio::join;
 
 use crate::fl;
@@ -164,12 +164,42 @@ impl Application for CosmicAppletArch {
         let au = self.updates.aur.len();
         let dev = self.updates.devel.len();
 
+        let pm_chain = if pm > 5 {
+            Some("...".to_string())
+        } else {
+            None
+        };
+        let pm_text: String = self
+            .updates
+            .pacman
+            .iter()
+            .map(|update| pretty_print_update(update))
+            .intersperse(", ".to_string())
+            .chain(pm_chain)
+            .collect();
+        let au_chain = if au > 5 {
+            Some("...".to_string())
+        } else {
+            None
+        };
+        let au_text: String = self
+            .updates
+            .aur
+            .iter()
+            .map(|update| pretty_print_update(update))
+            .intersperse(", ".to_string())
+            .chain(au_chain)
+            .collect();
+
         let total_updates = pm + au + dev;
         let content_list = if total_updates > 0 {
             content_list
-                .add(cosmic::widget::text(format!("Pacman updates: {pm}")))
-                .add(cosmic::widget::text(format!("Aur updates: {au}")))
-                .add(cosmic::widget::text(format!("Dev updates: {dev}")))
+                .add(cosmic::widget::Icon
+                    cosmic::widget::text(format!(
+                    "{pm} Pacman updates: {pm_text}"
+                )))
+                .add(cosmic::widget::text(format!("{au} AUR updates: {au_text}")))
+                .add(cosmic::widget::text(format!("{dev} Dev updates: todo")))
         } else {
             content_list.add(cosmic::widget::text("No updates available"))
         };
@@ -256,6 +286,20 @@ struct Updates {
     pacman: Vec<Update>,
     aur: Vec<Update>,
     devel: Vec<DevelUpdate>,
+}
+
+fn pretty_print_update(update: &Update) -> String {
+    format!(
+        "{} {}-{}->{}-{}",
+        update.pkgname, update.pkgver_cur, update.pkgrel_cur, update.pkgver_new, update.pkgrel_new
+    )
+}
+
+fn pretty_print_devel_update(update: &DevelUpdate) -> String {
+    format!(
+        "{} {}->*{}*",
+        update.pkgname, update.pkgver_cur, update.ref_id_new,
+    )
 }
 
 async fn get_updates_all(check_type: CheckType<CacheState>) -> (Updates, CacheState) {
