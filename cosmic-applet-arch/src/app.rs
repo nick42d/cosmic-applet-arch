@@ -1,16 +1,22 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
+use std::num::NonZeroU32;
+use std::rc::Rc;
 use std::time::Duration;
 
 use ::tokio::time::sleep;
 use arch_updates_rs::{CheckType, DevelUpdate, Update};
 use cosmic::app::{Command, Core};
+use cosmic::applet::cosmic_panel_config::PanelSize;
+use cosmic::applet::Size;
+use cosmic::iced::alignment::{Horizontal, Vertical};
 use cosmic::iced::futures::SinkExt;
 use cosmic::iced::wayland::popup::{destroy_popup, get_popup};
 use cosmic::iced::window::Id;
-use cosmic::iced::Limits;
+use cosmic::iced::{widget, Length, Limits};
 use cosmic::iced_style::application;
-use cosmic::widget::{self, settings};
+use cosmic::theme::Button;
+use cosmic::widget::settings;
 use cosmic::{Application, Element, Theme};
 use tokio::join;
 
@@ -19,7 +25,7 @@ use crate::fl;
 /// This is the struct that represents your application.
 /// It is used to define the data that will be used by your application.
 #[derive(Default)]
-pub struct CosmicAppArch {
+pub struct CosmicAppletArch {
     /// Application state which is managed by the COSMIC runtime.
     core: Core,
     /// The popup id.
@@ -76,21 +82,26 @@ pub enum Message {
 /// - `Message` is the enum that contains all the possible variants that your
 ///   application will need to transmit messages.
 /// - `APP_ID` is the unique identifier of your application.
-impl Application for CosmicAppArch {
+impl Application for CosmicAppletArch {
+    // Use the default Cosmic executor.
     type Executor = cosmic::executor::Default;
-
+    // Config data required prior to starting.
+    // TODO: Add configuration.
     type Flags = ();
-
     type Message = Message;
-
     const APP_ID: &'static str = "com.nick42d.CosmicAppletArch";
 
+    // Required functions
     fn core(&self) -> &Core {
         &self.core
     }
-
     fn core_mut(&mut self) -> &mut Core {
         &mut self.core
+    }
+
+    // Use default cosmic style
+    fn style(&self) -> Option<<Theme as application::StyleSheet>::Style> {
+        Some(cosmic::applet::style())
     }
 
     /// This is the entry point of your application, it is where you initialize
@@ -106,11 +117,10 @@ impl Application for CosmicAppArch {
     /// - `Command` type is used to send messages to your application.
     ///   `Command::none()` can be used to send no messages to your application.
     fn init(core: Core, _flags: Self::Flags) -> (Self, Command<Self::Message>) {
-        let app = CosmicAppArch {
+        let app = CosmicAppletArch {
             core,
             ..Default::default()
         };
-
         (app, Command::none())
     }
 
@@ -118,15 +128,7 @@ impl Application for CosmicAppArch {
         Some(Message::PopupClosed(id))
     }
 
-    /// This is the main view of your application, it is the root of your widget
-    /// tree.
-    ///
-    /// The `Element` type is used to represent the visual elements of your
-    /// application, it has a `Message` associated with it, which dictates
-    /// what type of message it can send.
-    ///
-    /// To get a better sense of which widgets are available, check out the
-    /// `widget` module.
+    // view is what is displayed in the toolbar when run as an applet.
     fn view(&self) -> Element<Self::Message> {
         let pm = self.updates.pacman.len();
         let au = self.updates.aur.len();
@@ -135,31 +137,21 @@ impl Application for CosmicAppArch {
         let total_updates = pm + au + dev;
 
         if total_updates > 0 {
-            cosmic::widget::button::custom(self.core.applet.text(format!("{pm}/{au}/{dev}")))
+            applet_button_with_text(self.core(), self.icon.to_str(), format!("{pm}/{au}/{dev}"))
                 .on_press_down(Message::TogglePopup)
-                .style(cosmic::theme::Button::AppletIcon)
                 .into()
         } else {
             self.core
                 .applet
-                .icon_button_from_handle(
-                    cosmic::widget::icon::from_name(self.icon.to_str())
-                        .symbolic(true)
-                        .size(self.core.applet.suggested_size(true).0)
-                        .into(),
-                )
+                .icon_button(self.icon.to_str())
                 .on_press(Message::TogglePopup)
                 .into()
-            // self.core
-            //     .applet
-            //     .icon_button(self.icon.to_str())
-            //     .on_press(Message::TogglePopup)
-            //     .into()
         }
     }
 
+    // view_window is what is displayed in the popup.
     fn view_window(&self, _id: Id) -> Element<Self::Message> {
-        let mut content_list = widget::list_column()
+        let content_list = cosmic::widget::list_column()
             .padding(5)
             .spacing(0)
             .add(settings::item(
@@ -226,10 +218,6 @@ impl Application for CosmicAppArch {
             }
         }
         Command::none()
-    }
-
-    fn style(&self) -> Option<<Theme as application::StyleSheet>::Style> {
-        Some(cosmic::applet::style())
     }
 
     fn subscription(&self) -> cosmic::iced::Subscription<Self::Message> {
@@ -319,4 +307,64 @@ async fn get_updates_all(check_type: CheckType<CacheState>) -> (Updates, CacheSt
         CheckType::Online => get_updates_online().await,
         CheckType::Offline(cache) => get_updates_offline(cache).await,
     }
+}
+
+// Extension of applet context icon_button_from_handle function.
+pub fn applet_button_with_text<'a, Message: 'static>(
+    core: &Core,
+    icon_name: impl AsRef<str>,
+    text: impl ToString,
+) -> cosmic::widget::Button<'a, Message> {
+    // Hardcode to symbolic = true.
+    let suggested = core.applet.suggested_size(true);
+    let applet_padding = core.applet.suggested_padding(true);
+
+    let (mut configured_width, mut configured_height) = core.applet.suggested_window_size();
+
+    // Adjust the width to include padding and force the crosswise dim to match the
+    // window size
+    let is_horizontal = core.applet.is_horizontal();
+    if is_horizontal {
+        configured_width = NonZeroU32::new(suggested.0 as u32 + applet_padding as u32 * 2).unwrap();
+    } else {
+        configured_height =
+            NonZeroU32::new(suggested.1 as u32 + applet_padding as u32 * 2).unwrap();
+    }
+
+    let icon = cosmic::widget::icon::from_name(icon_name.as_ref())
+        .symbolic(true)
+        .size(suggested.0)
+        .into();
+    let icon = cosmic::widget::icon(icon)
+        .style(cosmic::theme::Svg::Custom(Rc::new(|theme| {
+            cosmic::iced_style::svg::Appearance {
+                color: Some(theme.cosmic().background.on.into()),
+            }
+        })))
+        .width(Length::Fixed(suggested.0 as f32))
+        .height(Length::Fixed(suggested.1 as f32))
+        .into();
+    let t = match core.applet.size {
+        Size::PanelSize(PanelSize::XL) => cosmic::widget::text::title2,
+        Size::PanelSize(PanelSize::L) => cosmic::widget::text::title3,
+        Size::PanelSize(PanelSize::M) => cosmic::widget::text::title4,
+        Size::PanelSize(PanelSize::S) => cosmic::widget::text::body,
+        Size::PanelSize(PanelSize::XS) => cosmic::widget::text::body,
+        Size::Hardcoded(_) => cosmic::widget::text,
+    };
+    let text = t(text.to_string()).font(cosmic::font::default()).into();
+    cosmic::widget::button::custom(
+        cosmic::widget::layer_container(
+            cosmic::widget::row::with_children(vec![icon, text])
+                .align_items(cosmic::iced::Alignment::Center)
+                .spacing(2),
+        )
+        .align_x(Horizontal::Center)
+        .align_y(Vertical::Center)
+        .width(Length::Fill)
+        .height(Length::Fill),
+    )
+    .width(Length::Fixed(configured_width.get() as f32 + 45.0))
+    .height(Length::Fixed(configured_height.get() as f32))
+    .style(Button::AppletIcon)
 }
