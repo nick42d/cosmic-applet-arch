@@ -9,9 +9,9 @@ use cosmic::{
         window::Id,
         Length,
     },
-    iced_widget::row,
+    iced_widget::{column, row},
     theme::Button,
-    widget::{flex_row, settings, JustifyContent},
+    widget::{flex_row, settings, JustifyContent, Widget},
     Application, Element,
 };
 use itertools::Itertools;
@@ -76,35 +76,14 @@ pub fn view_window(app: &CosmicAppletArch, _id: Id) -> Element<Message> {
 
     let chain = |n: usize| if n > 5 { Some("...".to_string()) } else { None };
 
-    let pacman_list = cosmic::widget::column::Column::with_children(
-        app.updates
-            .pacman
-            .iter()
-            .map(pretty_print_update)
-            .map(|(name, update)| {
-                cosmic::widget::flex_row(vec![
-                    cosmic::widget::text(name).into(),
-                    cosmic::widget::text(update).into(),
-                ])
-                .justify_content(JustifyContent::SpaceBetween)
-                .into()
-            }),
+    let pacman_list = two_column_text_widget(app.updates.pacman.iter().map(pretty_print_update));
+    let aur_list = collapsible_two_column_list(
+        app.updates.aur.iter().map(pretty_print_update),
+        Collapsed::Expanded,
+        "Hello world".to_owned(),
     );
-
-    let aur_list = cosmic::widget::column::Column::with_children(
-        app.updates
-            .aur
-            .iter()
-            .map(pretty_print_update)
-            .map(|(name, update)| {
-                cosmic::widget::flex_row(vec![
-                    cosmic::widget::text(name).into(),
-                    cosmic::widget::text(update).into(),
-                ])
-                .justify_content(JustifyContent::SpaceBetween)
-                .into()
-            }),
-    );
+    let devel_list =
+        two_column_text_widget(app.updates.devel.iter().map(pretty_print_devel_update));
 
     let last_checked = match app.last_checked {
         Some(t) => OffsetDateTime::format(
@@ -123,6 +102,7 @@ pub fn view_window(app: &CosmicAppletArch, _id: Id) -> Element<Message> {
             .add(cosmic::widget::text(format!("{au} AUR updates:")))
             .add(aur_list)
             .add(cosmic::widget::text(format!("{dev} Dev updates: todo")))
+            .add(devel_list)
             .add(cosmic::widget::text(format!(
                 "Last checked: {last_checked}"
             )))
@@ -135,6 +115,39 @@ pub fn view_window(app: &CosmicAppletArch, _id: Id) -> Element<Message> {
         content_list.add(cosmic::widget::text("No updates available"))
     };
     app.core.applet.popup_container(content_list).into()
+}
+
+enum Collapsed {
+    Collapsed,
+    Expanded,
+}
+
+fn collapsible_two_column_list<'a>(
+    text: impl Iterator<Item = (String, String)> + 'a,
+    collapsed: Collapsed,
+    title: String,
+) -> Element<'a, Message> {
+    let heading = cosmic::widget::flex_row(vec![
+        cosmic::widget::text(title).into(),
+        cosmic::widget::text("!!!").into(),
+    ]);
+    let children = two_column_text_widget(text);
+    column![heading, children].into()
+}
+
+// TODO: See if I can return Widget instead of Element.
+fn two_column_text_widget<'a>(
+    text: impl Iterator<Item = (String, String)> + 'a,
+) -> Element<'a, Message> {
+    cosmic::widget::column::Column::with_children(text.map(|(col1, col2)| {
+        cosmic::widget::flex_row(vec![
+            cosmic::widget::text(col1).into(),
+            cosmic::widget::text(col2).into(),
+        ])
+        .justify_content(JustifyContent::SpaceBetween)
+        .into()
+    }))
+    .into()
 }
 
 /// (name, upgrade)
@@ -199,19 +212,20 @@ pub fn applet_button_with_text<'a, Message: 'static>(
         Size::PanelSize(PanelSize::XS) => cosmic::widget::text::body,
         Size::Hardcoded(_) => cosmic::widget::text,
     };
-    let text = t(text.to_string()).font(cosmic::font::default()).into();
+    let text = t(text.to_string()).font(cosmic::font::default());
+    let text_width = Widget::<Message, _, _>::size(&text).width;
+    eprintln!("{:?}", text_width);
     cosmic::widget::button::custom(
         cosmic::widget::layer_container(
-            cosmic::widget::row::with_children(vec![icon, text])
+            cosmic::widget::row::with_children(vec![icon, text.into()])
                 .align_items(cosmic::iced::Alignment::Center)
                 .spacing(2),
         )
         .align_x(Horizontal::Center)
         .align_y(Vertical::Center)
-        .width(Length::Fill)
         .height(Length::Fill),
     )
-    .width(Length::Fixed(configured_width.get() as f32 + 45.0))
+    // TODO: Decide what to do if vertical.
     .height(Length::Fixed(configured_height.get() as f32))
     .style(Button::AppletIcon)
 }
