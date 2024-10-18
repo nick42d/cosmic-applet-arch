@@ -1,6 +1,6 @@
 [Desktop Entry]
 Name=COSMIC Applet Arch
-Exec=cosmic-applet-arch %F
+Exec=cosmic-applet-arch
 Terminal=false
 Type=Application
 StartupNotify=true
@@ -8,6 +8,7 @@ Icon=com.nick42d.CosmicAppletArch
 Categories=COSMIC;Utility;
 Keywords=Arch;Package;
 MimeType=inode/directory;
+StartupNotify=true
 NoDisplay=true
 X-CosmicApplet=true
 X-CosmicHoverPopup=Auto

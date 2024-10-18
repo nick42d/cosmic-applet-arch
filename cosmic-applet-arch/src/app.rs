@@ -1,4 +1,5 @@
 use cosmic::app::{Command, Core};
+use cosmic::cosmic_theme::palette::IntoColor;
 use cosmic::iced::wayland::popup::{destroy_popup, get_popup};
 use cosmic::iced::window::Id;
 use cosmic::iced::Limits;
@@ -6,6 +7,8 @@ use cosmic::iced_style::application;
 use cosmic::{Application, Element, Theme};
 use std::time::{Duration, SystemTime};
 use subscription::Updates;
+use time::OffsetDateTime;
+use view::Collapsed;
 
 mod subscription;
 mod view;
@@ -21,17 +24,28 @@ pub struct CosmicAppletArch {
     /// Default field for cosmic applet
     popup: Option<Id>,
     updates: Updates,
-    last_checked: Option<SystemTime>,
+    pacman_list_state: Collapsed,
+    aur_list_state: Collapsed,
+    devel_list_state: Collapsed,
+    last_checked: Option<OffsetDateTime>,
     errors: Option<()>,
+}
+
+#[derive(Clone, Debug)]
+pub enum UpdateType {
+    Aur,
+    Pacman,
+    Devel,
 }
 
 #[derive(Debug, Clone)]
 pub enum Message {
     ForceGetUpdates,
     TogglePopup,
+    ToggleCollapsible(UpdateType),
     PopupClosed(Id),
     // (updates, Some(time web checked, if web checked), Some(errors when last web checked))
-    CheckUpdatesMsg(Updates, Option<SystemTime>, Option<()>),
+    CheckUpdatesMsg(Updates, Option<OffsetDateTime>, Option<()>),
 }
 
 impl Application for CosmicAppletArch {
@@ -86,6 +100,7 @@ impl Application for CosmicAppletArch {
                 self.handle_updates(updates, time, errors)
             }
             Message::ForceGetUpdates => todo!(),
+            Message::ToggleCollapsible(update_type) => self.handle_toggle_collapsible(update_type),
         }
     }
     // Long running stream of messages to the app.
@@ -99,6 +114,9 @@ impl CosmicAppletArch {
         if let Some(p) = self.popup.take() {
             destroy_popup(p)
         } else {
+            self.pacman_list_state = Collapsed::Collapsed;
+            self.aur_list_state = Collapsed::Collapsed;
+            self.devel_list_state = Collapsed::Collapsed;
             let new_id = Id::unique();
             self.popup.replace(new_id);
             let mut popup_settings =
@@ -113,6 +131,14 @@ impl CosmicAppletArch {
             get_popup(popup_settings)
         }
     }
+    fn handle_toggle_collapsible(&mut self, update_type: UpdateType) -> Command<Message> {
+        match update_type {
+            UpdateType::Aur => self.aur_list_state = self.aur_list_state.toggle(),
+            UpdateType::Pacman => self.pacman_list_state = self.pacman_list_state.toggle(),
+            UpdateType::Devel => self.devel_list_state = self.devel_list_state.toggle(),
+        }
+        Command::none()
+    }
     fn handle_popup_closed(&mut self, id: Id) -> Command<Message> {
         if self.popup.as_ref() == Some(&id) {
             self.popup = None;
@@ -122,7 +148,7 @@ impl CosmicAppletArch {
     fn handle_updates(
         &mut self,
         updates: Updates,
-        time: Option<SystemTime>,
+        time: Option<OffsetDateTime>,
         errors: Option<()>,
     ) -> Command<Message> {
         self.updates = updates;

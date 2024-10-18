@@ -5,14 +5,15 @@ use arch_updates_rs::{DevelUpdate, Update};
 use cosmic::{
     app::Core,
     applet::{cosmic_panel_config::PanelSize, Size},
+    cosmic_theme::palette::convert::TryIntoColor,
     iced::{
         alignment::{Horizontal, Vertical},
         widget,
         window::Id,
-        Length,
+        Length, Padding,
     },
     iced_widget::{column, row},
-    theme::Button,
+    theme::{self, Button},
     widget::{flex_row, settings, JustifyContent, Widget},
     Application, Element,
 };
@@ -58,11 +59,20 @@ pub fn view(app: &CosmicAppletArch) -> Element<Message> {
 
 // view_window is what is displayed in the popup.
 pub fn view_window(app: &CosmicAppletArch, _id: Id) -> Element<Message> {
-    let content_list = cosmic::widget::list_column().padding(5).spacing(0);
+    let theme = app.core.system_theme();
+    let cosmic::cosmic_theme::Spacing {
+        space_xxs, space_s, ..
+    } = theme::active().cosmic().spacing;
+
+    let content_list = cosmic::widget::list_column()
+        // as cosmic::iced_style::container::StyleSheet
+        .style(theme.current_container().to_owned())
+        .padding(5)
+        .spacing(space_xxs);
     const MAX_LINES: usize = 5;
 
     let pm = app.updates.pacman.len();
-    let au = app.updates.aur.len();
+    let aur = app.updates.aur.len();
     let dev = app.updates.devel.len();
 
     let chain = |n: usize| {
@@ -75,71 +85,133 @@ pub fn view_window(app: &CosmicAppletArch, _id: Id) -> Element<Message> {
 
     let pacman_list = collapsible_two_column_list(
         app.updates.pacman.iter().map(pretty_print_update),
-        Collapsed::Expanded,
+        &app.pacman_list_state,
         fl!(
             "updates-available",
             numberUpdates = pm,
             updateSource = "pacman"
         ),
+        Message::ToggleCollapsible(crate::app::UpdateType::Pacman),
     );
     let aur_list = collapsible_two_column_list(
         app.updates.aur.iter().map(pretty_print_update),
-        Collapsed::Expanded,
+        &app.aur_list_state,
         fl!(
             "updates-available",
-            numberUpdates = pm,
+            numberUpdates = aur,
             updateSource = "AUR"
         ),
+        Message::ToggleCollapsible(crate::app::UpdateType::Aur),
     );
-    let devel_list =
-        two_column_text_widget(app.updates.devel.iter().map(pretty_print_devel_update));
+    let devel_list = collapsible_two_column_list(
+        app.updates.devel.iter().map(pretty_print_devel_update),
+        &app.devel_list_state,
+        fl!(
+            "updates-available",
+            numberUpdates = dev,
+            updateSource = "devel"
+        ),
+        Message::ToggleCollapsible(crate::app::UpdateType::Devel),
+    );
 
     let last_checked = match app.last_checked {
         Some(t) => OffsetDateTime::format(
-            t.into(),
+            t,
             &time::format_description::parse("[day]/[month] [hour]:[minute]").unwrap(),
         )
         .unwrap(),
         None => "Not yet".to_owned(),
     };
 
-    let total_updates = pm + au + dev;
-    let content_list = if total_updates > 0 {
-        content_list
-            .add(pacman_list)
-            .add(aur_list)
-            .add(cosmic::widget::text(format!("{dev} Dev updates: todo")))
-            .add(devel_list)
-            .add(cosmic::widget::text(format!(
-                "Last checked: {last_checked}"
-            )))
-            .add(
-                cosmic::widget::button::custom(cosmic::widget::text("Click to refresh"))
-                    .on_press(Message::ForceGetUpdates),
-            )
-            .add(cosmic::widget::warning("Warning!"))
+    let total_updates = pm + aur + dev;
+    let content_list = if pm > 0 {
+        content_list.add(pacman_list)
     } else {
+        content_list
+    };
+    let content_list = if aur > 0 {
+        content_list.add(aur_list)
+    } else {
+        content_list
+    };
+    let content_list = if dev > 0 {
+        content_list.add(devel_list)
+    } else {
+        content_list
+    };
+    let content_list = if total_updates == 0 {
         content_list.add(cosmic::widget::text("No updates available"))
+    } else {
+        content_list
+    };
+    let content_list = content_list.add(
+        cosmic::applet::menu_button(cosmic::widget::text(fl!(
+            "last-checked",
+            dateTime = last_checked
+        )))
+        .on_press(Message::ForceGetUpdates),
+    );
+    let content_list = if let None = app.errors {
+        content_list.add(errors_row("Testing".to_string()))
+    } else {
+        content_list
     };
     app.core.applet.popup_container(content_list).into()
 }
 
-enum Collapsed {
+#[derive(Default)]
+pub enum Collapsed {
+    #[default]
     Collapsed,
     Expanded,
 }
 
+impl Collapsed {
+    pub fn toggle(&self) -> Self {
+        match self {
+            Collapsed::Collapsed => Collapsed::Expanded,
+            Collapsed::Expanded => Collapsed::Collapsed,
+        }
+    }
+}
+
+fn errors_row(error: String) -> Element<'static, Message> {
+    cosmic::widget::text(format!("Warning: {error}!!")).into()
+}
+
 fn collapsible_two_column_list<'a>(
     text: impl Iterator<Item = (String, String)> + 'a,
-    collapsed: Collapsed,
+    collapsed: &Collapsed,
     title: String,
+    on_press_mesage: Message,
 ) -> Element<'a, Message> {
-    let heading = cosmic::widget::flex_row(vec![
-        cosmic::widget::text(title).into(),
-        cosmic::widget::text("!!!").into(),
-    ]);
-    let children = two_column_text_widget(text);
-    column![heading, children].into()
+    let icon_name = match collapsed {
+        Collapsed::Collapsed => "go-down-symbolic",
+        Collapsed::Expanded => "go-up-symbolic",
+    };
+    let heading = cosmic::applet::menu_button(row![
+        cosmic::widget::text::body(title)
+            .width(Length::Fill)
+            .height(Length::Fixed(24.0))
+            .vertical_alignment(Vertical::Center),
+        cosmic::widget::container(
+            cosmic::widget::icon::from_name(icon_name)
+                .size(16)
+                .symbolic(true)
+        )
+        .align_x(Horizontal::Center)
+        .align_y(Vertical::Center)
+        .width(Length::Fixed(24.0))
+        .height(Length::Fixed(24.0)),
+    ])
+    .on_press(on_press_mesage);
+    match collapsed {
+        Collapsed::Collapsed => heading.into(),
+        Collapsed::Expanded => {
+            let children = two_column_text_widget(text);
+            column![heading, children].into()
+        }
+    }
 }
 
 // TODO: See if I can return Widget instead of Element.
@@ -220,6 +292,7 @@ pub fn applet_button_with_text<'a, Message: 'static>(
         Size::Hardcoded(_) => cosmic::widget::text,
     };
     let text = t(text.to_string()).font(cosmic::font::default());
+    // let text = t(text.to_string()).font(cosmic::font::default());
     let text_width = Widget::<Message, _, _>::size(&text).width;
     eprintln!("{:?}", text_width);
     cosmic::widget::button::custom(

@@ -10,7 +10,7 @@ i18n-embed-fl = "0.9.1"
 itertools = "0.13.0"
 open = "5.1.3"
 rust-embed = "8.3.0"
-time = { version = "0.3.36", features = ["formatting"] }
+time = { version = "0.3.36", features = ["formatting", "local-offset"] }
 tokio = { version = "1.40.0", features = ["full"] }
 
 [dependencies.libcosmic]
