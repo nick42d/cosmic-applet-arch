@@ -1,3 +1,5 @@
+use crate::fl;
+
 use super::{CosmicAppletArch, Message};
 use arch_updates_rs::{DevelUpdate, Update};
 use cosmic::{
@@ -35,17 +37,13 @@ impl AppIcon {
 
 // view is what is displayed in the toolbar when run as an applet.
 pub fn view(app: &CosmicAppletArch) -> Element<Message> {
-    let pm = app.updates.pacman.len();
-    let au = app.updates.aur.len();
-    let dev = app.updates.devel.len();
-
-    let total_updates = pm + au + dev;
+    let total_updates = app.updates.pacman.len() + app.updates.aur.len() + app.updates.devel.len();
 
     if total_updates > 0 {
         applet_button_with_text(
             app.core(),
             AppIcon::UpdatesAvailable.to_str(),
-            format!("{pm}/{au}/{dev}"),
+            format!("{total_updates}"),
         )
         .on_press_down(Message::TogglePopup)
         .into()
@@ -58,13 +56,6 @@ pub fn view(app: &CosmicAppletArch) -> Element<Message> {
     }
 }
 
-fn pluralise_n_updates(n: usize) -> String {
-    match n {
-        1 => "1 update".to_owned(),
-        n => format!("{n} updates"),
-    }
-}
-
 // view_window is what is displayed in the popup.
 pub fn view_window(app: &CosmicAppletArch, _id: Id) -> Element<Message> {
     let content_list = cosmic::widget::list_column().padding(5).spacing(0);
@@ -74,13 +65,31 @@ pub fn view_window(app: &CosmicAppletArch, _id: Id) -> Element<Message> {
     let au = app.updates.aur.len();
     let dev = app.updates.devel.len();
 
-    let chain = |n: usize| if n > 5 { Some("...".to_string()) } else { None };
+    let chain = |n: usize| {
+        if n > MAX_LINES {
+            Some("...".to_string())
+        } else {
+            None
+        }
+    };
 
-    let pacman_list = two_column_text_widget(app.updates.pacman.iter().map(pretty_print_update));
+    let pacman_list = collapsible_two_column_list(
+        app.updates.pacman.iter().map(pretty_print_update),
+        Collapsed::Expanded,
+        fl!(
+            "updates-available",
+            numberUpdates = pm,
+            updateSource = "pacman"
+        ),
+    );
     let aur_list = collapsible_two_column_list(
         app.updates.aur.iter().map(pretty_print_update),
         Collapsed::Expanded,
-        "Hello world".to_owned(),
+        fl!(
+            "updates-available",
+            numberUpdates = pm,
+            updateSource = "AUR"
+        ),
     );
     let devel_list =
         two_column_text_widget(app.updates.devel.iter().map(pretty_print_devel_update));
@@ -97,9 +106,7 @@ pub fn view_window(app: &CosmicAppletArch, _id: Id) -> Element<Message> {
     let total_updates = pm + au + dev;
     let content_list = if total_updates > 0 {
         content_list
-            .add(cosmic::widget::text(format!("{pm} Pacman updates:")))
             .add(pacman_list)
-            .add(cosmic::widget::text(format!("{au} AUR updates:")))
             .add(aur_list)
             .add(cosmic::widget::text(format!("{dev} Dev updates: todo")))
             .add(devel_list)
