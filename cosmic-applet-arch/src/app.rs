@@ -1,21 +1,23 @@
 use chrono::{DateTime, Local};
 use cosmic::app::{Command, Core};
-use cosmic::cosmic_theme::palette::IntoColor;
 use cosmic::iced::wayland::popup::{destroy_popup, get_popup};
 use cosmic::iced::window::Id;
 use cosmic::iced::Limits;
-use cosmic::{Application, Element, Theme};
+use cosmic::{Application, Element};
 use std::sync::Arc;
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 use subscription::Updates;
 use view::Collapsed;
 
 mod subscription;
 mod view;
 
+/// How often to compare current packages with the latest version in memory.
 const INTERVAL: Duration = Duration::from_secs(6);
+/// Every `CYCLES` number of `INTERVAL`s (starting at the first interval), the
+/// system will update the latest version in memory from the internet.
 const CYCLES: usize = 600;
-const BUF_SIZE: usize = 10;
+const SUBSCRIPTION_BUF_SIZE: usize = 10;
 
 #[derive(Default)]
 pub struct CosmicAppletArch {
@@ -32,21 +34,24 @@ pub struct CosmicAppletArch {
     errors: Option<()>,
 }
 
-#[derive(Clone, Debug)]
-pub enum UpdateType {
-    Aur,
-    Pacman,
-    Devel,
-}
-
 #[derive(Debug, Clone)]
 pub enum Message {
     ForceGetUpdates,
     TogglePopup,
     ToggleCollapsible(UpdateType),
     PopupClosed(Id),
-    // (updates, Some(time web checked, if web checked), Some(errors when last web checked))
-    CheckUpdatesMsg(Updates, Option<DateTime<Local>>, Option<()>),
+    CheckUpdatesMsg {
+        updates: Updates,
+        checked_online_time: Option<DateTime<Local>>,
+        errors: Option<()>,
+    },
+}
+
+#[derive(Clone, Debug)]
+pub enum UpdateType {
+    Aur,
+    Pacman,
+    Devel,
 }
 
 impl Application for CosmicAppletArch {
@@ -100,9 +105,11 @@ impl Application for CosmicAppletArch {
         match message {
             Message::TogglePopup => self.handle_toggle_popup(),
             Message::PopupClosed(id) => self.handle_popup_closed(id),
-            Message::CheckUpdatesMsg(updates, time, errors) => {
-                self.handle_updates(updates, time, errors)
-            }
+            Message::CheckUpdatesMsg {
+                updates,
+                checked_online_time,
+                errors,
+            } => self.handle_updates(updates, checked_online_time, errors),
             Message::ForceGetUpdates => self.handle_force_get_updates(),
             Message::ToggleCollapsible(update_type) => self.handle_toggle_collapsible(update_type),
         }

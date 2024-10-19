@@ -1,24 +1,44 @@
 use core::str;
-use futures::{stream::FuturesUnordered, StreamExt, TryStreamExt};
+use futures::{stream::FuturesUnordered, TryStreamExt};
 use raur::Raur;
 use srcinfo::Srcinfo;
-use std::str::FromStr;
+use std::{
+    io,
+    str::{FromStr, Utf8Error},
+};
 use thiserror::Error;
 use tokio::process::Command;
 use version_compare::Version;
 
+/// Packages ending with one of the devel suffixes will be checked against the
+/// repository, as well as just the pkgver and pkgrel.
+pub const DEVEL_SUFFIXES: [&str; 1] = ["-git"];
+
+pub type Result<T> = std::result::Result<T, Error>;
+
 #[derive(Error, Debug)]
 pub enum Error {
-    #[error("IO error running command")]
-    Io(#[from] std::io::Error),
-    #[error("Failed to parse update from checkupdates")]
-    CheckUpdatesParseFailed,
+    #[error("IO error running command `{0}`")]
+    Io(#[from] io::Error),
+    #[error("Web error `{0}`")]
+    Web(#[from] reqwest::Error),
+    #[error("Error parsing stdout from command")]
+    Stdout(#[from] Utf8Error),
     #[error("Failed to get ignored packages")]
     GetIgnoredPackagesFailed,
+    #[error("Head identifier too short")]
+    HeadIdentifierTooShort,
     #[error("Failed to get new aur packages")]
     GetNewAurPackagesFailed,
+    #[error("Error parsing .SRCINFO")]
+    ParseErrorSrcinfo(#[from] srcinfo::Error),
+    #[error("Failed to parse update from checkupdates string: `{0}`")]
+    ParseErrorCheckUpdates(String),
+    #[error("Failed to parse update from pacman string: `{0}`")]
+    ParseErrorPacman(String),
+    #[error("Failed to parse pkgver and pkgrel from string `{0}`")]
+    ParseErrorPkgverPkgrel(String),
 }
-pub type Result<T> = std::result::Result<T, Error>;
 
 pub enum CheckType<Cache> {
     Online,
@@ -36,121 +56,112 @@ pub struct Update {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DevelUpdate {
-    // Consider adding pkgrel, even though not required for updating.
     pub pkgname: String,
     pub pkgver_cur: String,
+    pub pkgrel_cur: String,
+    /// When checking a devel update, we don't get a pkgver/pkgrel so-to-speak,
+    /// we instead get the github ref.
     pub ref_id_new: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Package {
+struct Package {
     pub pkgname: String,
     pub pkgver: String,
     pub pkgrel: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PackageUrl<'a> {
+struct PackageUrl<'a> {
     remote: String,
     protocol: &'a str,
     branch: Option<&'a str>,
 }
 
-impl TryFrom<&str> for Update {
-    type Error = Error;
-    /// Example input: libadwaita 1:1.6.0-1 -> 1:1.6.1-1
-    fn try_from(value: &str) -> Result<Self> {
-        /// (pkgver, pkgrel)
-        fn parse_pkgvers(val: &str) -> Result<(String, String)> {
-            if let Some((ver, rel)) = val.rsplit_once('-') {
-                return Ok((ver.to_string(), rel.to_string()));
-            }
-            Err(Error::CheckUpdatesParseFailed)
-        }
-        let mut iter = value.split(' ');
-        let pkgname = iter
-            .next()
-            .ok_or(Error::CheckUpdatesParseFailed)?
-            .to_string();
-        let (pkgver_cur, pkgrel_cur) =
-            parse_pkgvers(iter.next().ok_or(Error::CheckUpdatesParseFailed)?)?;
-        let (pkgver_new, pkgrel_new) =
-            parse_pkgvers(iter.nth(1).ok_or(Error::CheckUpdatesParseFailed)?)?;
-        Ok(Self {
-            pkgname,
-            pkgver_cur,
-            pkgrel_cur,
-            pkgver_new,
-            pkgrel_new,
-        })
-    }
-}
-
+/// Use the `checkupdates` function to check if any pacman-managed packages have
+/// updates due.
 pub async fn check_updates(check_type: CheckType<()>) -> Result<Vec<Update>> {
     let args = match check_type {
         CheckType::Online => ["--nocolor"].as_slice(),
         CheckType::Offline(()) => ["--nosync", "--nocolor"].as_slice(),
     };
     let output = Command::new("checkupdates").args(args).output().await?;
-    str::from_utf8(output.stdout.as_slice())
-        .map_err(|_| Error::CheckUpdatesParseFailed)?
+    str::from_utf8(output.stdout.as_slice())?
         .lines()
-        .map(TryInto::try_into)
+        .map(parse_update)
         .collect()
 }
 
-// TODO: Consider case where pkgrel has been bumped.
-/// (packages that have an update, cache of packages)
+/// Check if any packages ending in `DEVEL_SUFFIXES` have updates to their
+/// source repositories.
+/// Note that for this to be accurate, it's reliant on each devel package having
+/// only one source URL. If this is not the case, the function will produce a
+/// DevelUpdate for each source url, and may assume one or more are out of date.
+///
+/// NOTE: This is also reliant on VCS packages being good
+/// citizens and following the VCS Packaging Guidelines.
+/// https://wiki.archlinux.org/title/VCS_package_guidelines
+/// Returns a tuple of:
+///  - Packages that are not up to date.
+///  - Latest version of all devel packages - for offline use. Note, if
+///    CheckType was Offline, this simple returns the same cache back as nothing
+///    has changed.
 pub async fn check_devel_updates(
     check_type: CheckType<Vec<DevelUpdate>>,
 ) -> Result<(Vec<DevelUpdate>, Vec<DevelUpdate>)> {
     let devel_packages = get_devel_packages().await?;
     let devel_package_srcinfos = devel_packages
         .into_iter()
-        .map(get_aur_srcinfo)
+        .map(|pkg| get_aur_srcinfo(pkg.pkgname))
         .collect::<FuturesUnordered<_>>()
+        // May be able to avoid this collection using stream or iterator adaptors.
         .try_collect::<Vec<_>>()
-        .await
-        .unwrap();
+        .await?;
     let devel_updates = match check_type {
         CheckType::Online => {
             devel_package_srcinfos
                 .iter()
-                // May be able to avoid the earlier collection.
-                .map(|srcinfo| async move {
-                    let url = parse_url(srcinfo.base.source.first().unwrap().vec.first().unwrap())
-                        .unwrap();
-                    let pkgver_cur = srcinfo.base.pkgver.to_owned();
-                    let pkgname = srcinfo.pkg.pkgname.to_owned();
-                    let ref_id_new = get_head_identifier(url.remote, url.branch).await;
-                    DevelUpdate {
-                        pkgname,
-                        pkgver_cur,
-                        ref_id_new,
-                    }
+                .flat_map(|srcinfo| {
+                    srcinfo
+                        .base
+                        .source
+                        .iter()
+                        .flat_map(|arch| arch.vec.iter())
+                        .flat_map(|url| parse_url(url))
+                        .map(move |url| async move {
+                            let pkgver_cur = srcinfo.base.pkgver.to_owned();
+                            let pkgrel_cur = srcinfo.base.pkgrel.to_owned();
+                            let pkgname = srcinfo.pkg.pkgname.to_owned();
+                            let ref_id_new = get_head_identifier(url.remote, url.branch).await?;
+                            Ok::<_, crate::Error>(DevelUpdate {
+                                pkgname,
+                                pkgver_cur,
+                                ref_id_new,
+                                pkgrel_cur,
+                            })
+                        })
                 })
                 .collect::<FuturesUnordered<_>>()
-                .collect::<Vec<_>>()
+                .try_collect::<Vec<_>>()
                 .await
         }
         CheckType::Offline(cache) => devel_package_srcinfos
             .iter()
-            .map(move |srcinfo| {
-                let matching_cached = cache
+            .flat_map(|srcinfo| {
+                cache
                     .iter()
-                    .find(|cache_package| cache_package.pkgname == srcinfo.pkg.pkgname);
-                let ref_id_new = match matching_cached {
-                    Some(cache_package) => cache_package.ref_id_new.to_owned(),
-                    None => srcinfo.base.pkgver.to_owned(),
-                };
-                DevelUpdate {
-                    pkgname: srcinfo.pkg.pkgname.to_owned(),
-                    pkgver_cur: srcinfo.base.pkgver.to_owned(),
-                    ref_id_new,
-                }
+                    .filter(|cache_package| cache_package.pkgname == srcinfo.pkg.pkgname)
+                    .map(move |cache_package| {
+                        Ok(DevelUpdate {
+                            pkgname: srcinfo.pkg.pkgname.to_owned(),
+                            pkgver_cur: srcinfo.base.pkgver.to_owned(),
+                            pkgrel_cur: srcinfo.base.pkgrel.to_owned(),
+                            ref_id_new: cache_package.ref_id_new.to_owned(),
+                        })
+                    })
             })
             .collect(),
-    };
+    }?;
     Ok((
         devel_updates
             .iter()
@@ -161,12 +172,17 @@ pub async fn check_devel_updates(
     ))
 }
 
+/// Check if any packages ending in `DEVEL_SUFFIXES` are up to date.
+/// Returns a tuple of:
+///  - Packages that are not up to date.
+///  - Latest version of all devel packages - for offline use. Note, if
+///    CheckType was Offline, this simple returns the same cache back as nothing
+///    has changed.
 // TODO: Consider if devel packages should be filtered entirely.
-/// (packages that have an update, cache of packages)
 pub async fn check_aur_updates(
     check_type: CheckType<Vec<Update>>,
 ) -> Result<(Vec<Update>, Vec<Update>)> {
-    let old = get_old_aur_packages().await?;
+    let old = get_aur_packages().await?;
     let updated_cache: Vec<Update> = match check_type {
         CheckType::Online => {
             let aur = raur::Handle::new();
@@ -181,7 +197,7 @@ pub async fn check_aur_updates(
             .into_iter()
             .filter_map(|new| {
                 let matching_old = &old.iter().find(|old| old.pkgname == new.name)?.clone();
-                let (pkgver_new, pkgrel_new) = parse_version(new.version).unwrap();
+                let (pkgver_new, pkgrel_new) = parse_ver_and_rel(new.version).unwrap();
                 Some(Update {
                     pkgname: matching_old.pkgname.to_owned(),
                     pkgver_cur: matching_old.pkgver.to_owned(),
@@ -219,7 +235,10 @@ pub async fn check_aur_updates(
         updated_cache
             .iter()
             .filter(|package| {
-                // VCS packages will fail here! But this is likely desired behaviour.
+                // If it's not possible to determine ordering for a package, it will be filtered
+                // out. Note that this can include some VCS packages using
+                // commit hashes as pkgver. That is likely acceptable behaviour
+                // as VCS packages will be analyzed in check_devel_updates().
                 let Some(pkgver_new) = Version::from(&package.pkgver_new) else {
                     return false;
                 };
@@ -235,8 +254,10 @@ pub async fn check_aur_updates(
     ))
 }
 
+/// pacman conf has a list of packages that should be ignored by pacman. This
+/// command fetches their pkgnames.
 async fn get_ignored_packages() -> Result<Vec<String>> {
-    // Considered pacmanconf crate here, but it's sync, and does the same thing
+    // I considered pacmanconf crate here, but it's sync, and does the same thing
     // under the hood (runs pacman-conf) as a Command.
     let output = Command::new("pacman-conf")
         .arg("IgnorePkg")
@@ -249,24 +270,10 @@ async fn get_ignored_packages() -> Result<Vec<String>> {
         .collect())
 }
 
-/// Parse output of pacman -Qm into a package.
-fn parse_pacman_qm(line: String) -> Result<Package> {
-    let (pkgname, rest) = line.split_once(' ').unwrap();
-    let (pkgver, pkgrel) = parse_version(rest)?;
-    Ok(Package {
-        pkgname: pkgname.to_owned(),
-        pkgver,
-        pkgrel,
-    })
-}
-
-/// Parse output of a combined pkgrel-pkgver.
-fn parse_version(version: impl AsRef<str>) -> Result<(String, String)> {
-    let (pkgver, pkgrel) = version.as_ref().rsplit_once('-').unwrap();
-    Ok((pkgver.into(), pkgrel.into()))
-}
-
-async fn get_old_aur_packages() -> Result<Vec<Package>> {
+/// Get a list of all aur packages on the system.
+/// An AUR package is a package returned by `pacman -Qm` excluding ignored
+/// packages.
+async fn get_aur_packages() -> Result<Vec<Package>> {
     let (ignored_packages, output) = tokio::join!(
         get_ignored_packages(),
         Command::new("pacman").arg("-Qm").output()
@@ -281,60 +288,99 @@ async fn get_old_aur_packages() -> Result<Vec<Package>> {
                 .iter()
                 .any(|ignored_package| line.contains(ignored_package))
         })
-        .map(ToString::to_string)
         .map(parse_pacman_qm)
         .collect()
 }
 
-async fn get_devel_packages() -> Result<Vec<String>> {
-    const DEVEL_SUFFIXES: [&str; 1] = ["-git"];
-    let (ignored_packages, output_unfiltered) = tokio::join!(
-        get_ignored_packages(),
-        Command::new("pacman").arg("-Qm").output()
-    );
-    let ignored_packages = ignored_packages?;
-    Ok(str::from_utf8(output_unfiltered?.stdout.as_slice())
-        .map_err(|_| Error::GetIgnoredPackagesFailed)?
-        .lines()
-        // Only include packages with DEVEL_SUFFIXES.
-        .filter(|line| {
+/// Get a list of all devel packages on the system.
+/// A devel package is an AUR package ending with one of the `DEVEL_SUFFIXES`.
+async fn get_devel_packages() -> Result<Vec<Package>> {
+    let aur_packages = get_aur_packages().await?;
+    Ok(aur_packages
+        .into_iter()
+        .filter(|package| {
             DEVEL_SUFFIXES
                 .iter()
-                .any(|suffix| line.to_lowercase().contains(suffix))
+                .any(|suffix| package.pkgname.to_lowercase().contains(suffix))
         })
-        // Filter out any ignored packages
-        .filter(|line| {
-            ignored_packages
-                .iter()
-                .any(|ignored_package| line.contains(ignored_package))
-        })
-        .map(ToString::to_string)
         .collect())
 }
 
+/// Get and parse the .SRCINFO for an aur package.
 async fn get_aur_srcinfo(pkgname: String) -> Result<Srcinfo> {
     let url = format!("https://aur.archlinux.org/cgit/aur.git/plain/.SRCINFO?h={pkgname}");
-    let raw = reqwest::get(url).await.unwrap().text().await.unwrap();
-    Ok(Srcinfo::from_str(&raw).unwrap())
+    let raw = reqwest::get(url).await?.text().await?;
+    Ok(Srcinfo::from_str(&raw)?)
 }
 
-async fn get_head_identifier(url: String, branch: Option<&str>) -> String {
-    str::from_utf8(
+/// Get head identifier for a git repo - last 7 digits from commit hash.
+/// If a branch is not provided, HEAD will be selected.
+async fn get_head_identifier(url: String, branch: Option<&str>) -> Result<String> {
+    let id = str::from_utf8(
         Command::new("git")
             .args(["ls-remote", &url, branch.unwrap_or("HEAD")])
             .output()
-            .await
-            .unwrap()
+            .await?
             .stdout
             .as_ref(),
-    )
-    .unwrap()
+    )?
     .get(0..7)
-    .unwrap()
-    .to_string()
+    .ok_or_else(|| Error::HeadIdentifierTooShort)?
+    .to_string();
+    Ok(id)
 }
 
-// This is from paru (GPL3)
+/// Parse output of pacman -Qm into a package.
+/// Example input: "watchman-bin 2024.04.15.00-1"
+fn parse_pacman_qm(line: &str) -> Result<Package> {
+    let (pkgname, rest) = line
+        .split_once(' ')
+        .ok_or_else(|| Error::ParseErrorPacman(line.to_string()))?;
+    let (pkgver, pkgrel) = parse_ver_and_rel(rest)?;
+    Ok(Package {
+        pkgname: pkgname.to_owned(),
+        pkgver,
+        pkgrel,
+    })
+}
+
+/// Parse output of a combined pkgrel-pkgver.
+/// Example input: "1.26.15-1"
+fn parse_ver_and_rel(version: impl AsRef<str>) -> Result<(String, String)> {
+    let (pkgver, pkgrel) = version
+        .as_ref()
+        .rsplit_once('-')
+        .ok_or_else(|| Error::ParseErrorPkgverPkgrel(version.as_ref().to_string()))?;
+    Ok((pkgver.into(), pkgrel.into()))
+}
+
+/// Parse output line from checkupdates
+/// Example input: libadwaita 1:1.6.0-1 -> 1:1.6.1-1
+fn parse_update(value: &str) -> Result<Update> {
+    let mut iter = value.split(' ');
+    let pkgname = iter
+        .next()
+        .ok_or(Error::ParseErrorCheckUpdates(value.to_string()))?
+        .to_string();
+    let (pkgver_cur, pkgrel_cur) = parse_ver_and_rel(
+        iter.next()
+            .ok_or(Error::ParseErrorCheckUpdates(value.to_string()))?,
+    )?;
+    let (pkgver_new, pkgrel_new) = parse_ver_and_rel(
+        iter.nth(1)
+            .ok_or(Error::ParseErrorCheckUpdates(value.to_string()))?,
+    )?;
+    Ok(Update {
+        pkgname,
+        pkgver_cur,
+        pkgrel_cur,
+        pkgver_new,
+        pkgrel_new,
+    })
+}
+
+/// Parse source field from .SRCINFO
+// NOTE: This is from paru (GPL3)
 fn parse_url(source: &str) -> Option<PackageUrl> {
     let url = source.splitn(2, "::").last().unwrap();
 
@@ -376,9 +422,9 @@ fn parse_url(source: &str) -> Option<PackageUrl> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        check_aur_updates, check_devel_updates, check_updates, get_aur_srcinfo, get_devel_packages,
-        get_head_identifier, get_old_aur_packages, parse_pacman_qm, parse_url, parse_version,
-        CheckType, DevelUpdate, Package, PackageUrl, Update,
+        check_aur_updates, check_devel_updates, check_updates, get_aur_srcinfo,
+        get_head_identifier, parse_pacman_qm, parse_update, parse_url, parse_ver_and_rel,
+        CheckType, Error, Package, PackageUrl, Update,
     };
 
     #[tokio::test]
@@ -419,8 +465,9 @@ mod tests {
         let srcinfo = get_aur_srcinfo("hyprutils-git".to_string()).await.unwrap();
         let url = srcinfo.base.source.first().unwrap().vec.first().unwrap();
         let url_parsed = parse_url(url).unwrap();
-        let x = get_head_identifier(url_parsed.remote, url_parsed.branch).await;
-        eprintln!("{}", x)
+        get_head_identifier(url_parsed.remote, url_parsed.branch)
+            .await
+            .unwrap();
     }
 
     #[test]
@@ -437,8 +484,16 @@ mod tests {
         assert_eq!(url, expected);
     }
     #[test]
+    fn test_parse_url_none() {
+        let url = parse_url(
+            "paper-icon-themegit:gopher://github.com/snwh/paper-icon-theme.git branch=main",
+        );
+        eprintln!("{:#?}", url);
+        assert!(url.is_none());
+    }
+    #[test]
     fn test_parse_update() {
-        let update = Update::try_from("libadwaita 1:1.6.0-1 -> 1:1.6.1-2").unwrap();
+        let update = parse_update("libadwaita 1:1.6.0-1 -> 1:1.6.1-2").unwrap();
         let expected = Update {
             pkgname: "libadwaita".to_string(),
             pkgver_cur: "1:1.6.0".to_string(),
@@ -449,9 +504,18 @@ mod tests {
         assert_eq!(update, expected);
     }
     #[test]
+    fn test_parse_update_error() {
+        let str = "libadwaita1:1.6.0-1 - 1:1.6.12";
+        let update = parse_update(str).unwrap_err();
+        eprintln!("{:#?}", update);
+        match update {
+            Error::ParseErrorCheckUpdates(s) => assert_eq!(s, str),
+            _ => panic!(),
+        }
+    }
+    #[test]
     fn test_parse_pacman_qm() {
-        let update =
-            parse_pacman_qm("winetricks-git 20240105.r47.g72b934e1-2".to_string()).unwrap();
+        let update = parse_pacman_qm("winetricks-git 20240105.r47.g72b934e1-2").unwrap();
         let expected = Package {
             pkgname: "winetricks-git".to_string(),
             pkgver: "20240105.r47.g72b934e1".to_string(),
@@ -460,9 +524,28 @@ mod tests {
         assert_eq!(update, expected);
     }
     #[test]
+    fn test_parse_pacman_qm_error() {
+        let str = "winetricks-git0240105.r47.g72b934e1-2";
+        let update = parse_pacman_qm(str).unwrap_err();
+        eprintln!("{:#?}", update);
+        match update {
+            Error::ParseErrorPacman(s) => assert_eq!(s, str),
+            _ => panic!(),
+        }
+    }
+    #[test]
     fn test_parse_version() {
-        let actual = parse_version("20-240105.r47.g72b934e1-2").unwrap();
+        let actual = parse_ver_and_rel("20-240105.r47.g72b934e1-2").unwrap();
         let expected = ("20-240105.r47.g72b934e1".to_string(), "2".to_string());
         assert_eq!(actual, expected);
+    }
+    #[test]
+    fn test_parse_version_error() {
+        let str = "20240105.r47.g72b934e12";
+        let actual = parse_ver_and_rel("20240105.r47.g72b934e12").unwrap_err();
+        match actual {
+            Error::ParseErrorPkgverPkgrel(s) => assert_eq!(s, str),
+            _ => panic!(),
+        }
     }
 }

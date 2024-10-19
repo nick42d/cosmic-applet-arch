@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use super::{CosmicAppletArch, Message, BUF_SIZE, CYCLES, INTERVAL};
+use super::{CosmicAppletArch, Message, CYCLES, INTERVAL, SUBSCRIPTION_BUF_SIZE};
 use arch_updates_rs::{CheckType, DevelUpdate, Update};
 use chrono::Local;
 use cosmic::{
@@ -24,17 +24,19 @@ pub fn subscription(app: &CosmicAppletArch) -> cosmic::iced::Subscription<Messag
                         0 => arch_updates_rs::CheckType::Online,
                         _ => arch_updates_rs::CheckType::Offline(cache),
                     };
-                    let (output, cache_tmp) = get_updates_all(check_type).await;
+                    let (updates, cache_tmp) = get_updates_all(check_type).await;
                     cache = cache_tmp;
-                    tx.send(Message::CheckUpdatesMsg(
-                        output,
+                    let checked_online_time =
                         if counter == 0 {
                             Some(Local::now())
                         } else {
                             None
-                        },
-                        None,
-                    ))
+                        };
+                    tx.send(Message::CheckUpdatesMsg{
+                        updates,
+                        checked_online_time,
+                        errors: None,
+                    })
                     .await
                     .unwrap();
                     counter += 1;
@@ -43,13 +45,13 @@ pub fn subscription(app: &CosmicAppletArch) -> cosmic::iced::Subscription<Messag
                     }
                 }
                 _ = notified => {
-                    let (output, cache_tmp) = get_updates_all(CheckType::Online).await;
+                    let (updates, cache_tmp) = get_updates_all(CheckType::Online).await;
                     cache = cache_tmp;
-                    tx.send(Message::CheckUpdatesMsg(
-                        output,
-                        Some(Local::now()),
-                        None,
-                    ))
+                    tx.send(Message::CheckUpdatesMsg{
+                        updates,
+                        checked_online_time: Some(Local::now()),
+                        errors: None,
+                    })
                     .await
                     .unwrap();
                     counter = 1;
@@ -58,7 +60,7 @@ pub fn subscription(app: &CosmicAppletArch) -> cosmic::iced::Subscription<Messag
         }
     };
     // subscription::Subscription::run(worker)
-    cosmic::iced::subscription::channel(0, BUF_SIZE, worker)
+    cosmic::iced::subscription::channel(0, SUBSCRIPTION_BUF_SIZE, worker)
 }
 
 struct Ticker {
@@ -67,7 +69,7 @@ struct Ticker {
 
 impl Ticker {
     fn new(interval: Duration) -> Self {
-        let (tx, rx) = tokio::sync::mpsc::channel::<()>(BUF_SIZE);
+        let (tx, rx) = tokio::sync::mpsc::channel::<()>(SUBSCRIPTION_BUF_SIZE);
         let mut interval = tokio::time::interval(INTERVAL);
         tokio::spawn(async move {
             loop {
