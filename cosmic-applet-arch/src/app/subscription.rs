@@ -1,10 +1,10 @@
 use super::{CosmicAppletArch, Message, BUF_SIZE, CYCLES, INTERVAL};
 use arch_updates_rs::{CheckType, DevelUpdate, Update};
+use chrono::Local;
 use cosmic::{
     iced::futures::{channel::mpsc, SinkExt},
     iced_futures::subscription,
 };
-use time::OffsetDateTime;
 use tokio::join;
 
 // Long running stream of messages to the app.
@@ -22,7 +22,7 @@ pub fn subscription(_app: &CosmicAppletArch) -> cosmic::iced::Subscription<Messa
             tx.send(Message::CheckUpdatesMsg(
                 output,
                 if counter == 0 {
-                    Some(OffsetDateTime::now_local().unwrap_or(OffsetDateTime::now_utc()))
+                    Some(Local::now())
                 } else {
                     None
                 },

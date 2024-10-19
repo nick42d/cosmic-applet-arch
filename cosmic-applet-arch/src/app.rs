@@ -1,3 +1,4 @@
+use chrono::{DateTime, Local};
 use cosmic::app::{Command, Core};
 use cosmic::cosmic_theme::palette::IntoColor;
 use cosmic::iced::wayland::popup::{destroy_popup, get_popup};
@@ -6,7 +7,6 @@ use cosmic::iced::Limits;
 use cosmic::{Application, Element, Theme};
 use std::time::{Duration, SystemTime};
 use subscription::Updates;
-use time::OffsetDateTime;
 use view::Collapsed;
 
 mod subscription;
@@ -26,7 +26,7 @@ pub struct CosmicAppletArch {
     pacman_list_state: Collapsed,
     aur_list_state: Collapsed,
     devel_list_state: Collapsed,
-    last_checked: Option<OffsetDateTime>,
+    last_checked: Option<DateTime<Local>>,
     errors: Option<()>,
 }
 
@@ -44,7 +44,7 @@ pub enum Message {
     ToggleCollapsible(UpdateType),
     PopupClosed(Id),
     // (updates, Some(time web checked, if web checked), Some(errors when last web checked))
-    CheckUpdatesMsg(Updates, Option<OffsetDateTime>, Option<()>),
+    CheckUpdatesMsg(Updates, Option<DateTime<Local>>, Option<()>),
 }
 
 impl Application for CosmicAppletArch {
@@ -151,7 +151,7 @@ impl CosmicAppletArch {
     fn handle_updates(
         &mut self,
         updates: Updates,
-        time: Option<OffsetDateTime>,
+        time: Option<DateTime<Local>>,
         errors: Option<()>,
     ) -> Command<Message> {
         self.updates = updates;

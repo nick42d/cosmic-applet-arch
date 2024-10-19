@@ -21,7 +21,6 @@ use cosmic::{
 use itertools::Itertools;
 use std::rc::Rc;
 use std::{borrow::Borrow, num::NonZeroU32};
-use time::OffsetDateTime;
 
 enum AppIcon {
     UpdatesAvailable,
@@ -60,18 +59,31 @@ pub fn view(app: &CosmicAppletArch) -> Element<Message> {
 
 // view_window is what is displayed in the popup.
 pub fn view_window(app: &CosmicAppletArch, _id: Id) -> Element<Message> {
+    const MAX_LINES: usize = 10;
+
     let cosmic::cosmic_theme::Spacing {
         space_xxs, space_s, ..
     } = theme::active().cosmic().spacing;
-
-    const MAX_LINES: usize = 5;
 
     let pm = app.updates.pacman.len();
     let aur = app.updates.aur.len();
     let dev = app.updates.devel.len();
 
+    let chain_if_overflowed = |n| {
+        if n > MAX_LINES {
+            Some(("...".to_string(), "".to_string()))
+        } else {
+            None
+        }
+    };
+
     let pacman_list = collapsible_two_column_list(
-        app.updates.pacman.iter().map(pretty_print_update),
+        app.updates
+            .pacman
+            .iter()
+            .map(pretty_print_update)
+            .take(MAX_LINES)
+            .chain(chain_if_overflowed(pm)),
         &app.pacman_list_state,
         fl!(
             "updates-available",
@@ -81,7 +93,12 @@ pub fn view_window(app: &CosmicAppletArch, _id: Id) -> Element<Message> {
         Message::ToggleCollapsible(crate::app::UpdateType::Pacman),
     );
     let aur_list = collapsible_two_column_list(
-        app.updates.aur.iter().map(pretty_print_update),
+        app.updates
+            .aur
+            .iter()
+            .map(pretty_print_update)
+            .take(MAX_LINES)
+            .chain(chain_if_overflowed(aur)),
         &app.aur_list_state,
         fl!(
             "updates-available",
@@ -91,7 +108,12 @@ pub fn view_window(app: &CosmicAppletArch, _id: Id) -> Element<Message> {
         Message::ToggleCollapsible(crate::app::UpdateType::Aur),
     );
     let devel_list = collapsible_two_column_list(
-        app.updates.devel.iter().map(pretty_print_devel_update),
+        app.updates
+            .devel
+            .iter()
+            .map(pretty_print_devel_update)
+            .take(MAX_LINES)
+            .chain(chain_if_overflowed(dev)),
         &app.devel_list_state,
         fl!(
             "updates-available",
@@ -102,11 +124,7 @@ pub fn view_window(app: &CosmicAppletArch, _id: Id) -> Element<Message> {
     );
 
     let last_checked = match app.last_checked {
-        Some(t) => OffsetDateTime::format(
-            t,
-            &time::format_description::parse("[day]/[month] [hour]:[minute]").unwrap(),
-        )
-        .unwrap(),
+        Some(t) => format!("{}", t.format("%-d/%-m %-I:%M %p")),
         None => "Not yet".to_owned(),
     };
 
@@ -115,26 +133,14 @@ pub fn view_window(app: &CosmicAppletArch, _id: Id) -> Element<Message> {
         .padding(5)
         .spacing(space_xxs)
         .push_maybe((pm > 0).then_some(pacman_list))
-        .push_maybe((aur > 0 && pm > 0).then_some(
-            // cosmic::applet::padded_control(cosmic::widget::divider::horizontal::default())
-            //     .padding([space_xxs, space_s]),
-            cosmic::widget::divider::horizontal::default(),
-        ))
+        .push_maybe((aur > 0 && pm > 0).then_some(cosmic_applet_divider(space_s).into()))
         .push_maybe((aur > 0).then_some(aur_list))
-        .push_maybe(
-            (dev > 0 && pm + aur > 0).then_some(
-                cosmic::applet::padded_control(cosmic::widget::divider::horizontal::default())
-                    .padding([space_xxs, 0]),
-            ),
-        )
+        .push_maybe((dev > 0 && pm + aur > 0).then_some(cosmic_applet_divider(space_s).into()))
         .push_maybe((dev > 0).then_some(devel_list))
         .push_maybe(
             (total_updates == 0).then_some(body_text_row("No updates available".to_string())),
         )
-        .push(
-            cosmic::applet::padded_control(cosmic::widget::divider::horizontal::default())
-                .padding([space_xxs, 0]),
-        )
+        .push(cosmic_applet_divider(space_s).into())
         .push(
             cosmic::applet::menu_button(cosmic::widget::text::body(fl!(
                 "last-checked",
@@ -144,6 +150,13 @@ pub fn view_window(app: &CosmicAppletArch, _id: Id) -> Element<Message> {
         )
         .push_maybe(app.errors.map(|e| errors_row("Testing".to_string())));
     app.core.applet.popup_container(content_list).into()
+}
+
+fn cosmic_applet_divider(
+    spacing: u16,
+) -> impl Widget<Message, cosmic::Theme, cosmic::Renderer> + Into<Element<'static, Message>> {
+    cosmic::applet::padded_control(cosmic::widget::divider::horizontal::default())
+        .padding([0, spacing])
 }
 
 #[derive(Default)]
