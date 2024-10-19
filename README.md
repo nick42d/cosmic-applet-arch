@@ -6,7 +6,7 @@ Inspired by https://github.com/savely-krasovsky/waybar-updates and https://githu
 ![image](https://github.com/user-attachments/assets/61d0e2af-4036-4dd9-948c-55833f0f8230)
 
 ## Features
- - Native COSMIC look and feel.
+ - Native COSMIC look and feel, supporting both light and dark mode.
  - pacman, AUR, and devel package upgrades shown.
 
 ## Development setup
