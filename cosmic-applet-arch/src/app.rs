@@ -5,6 +5,7 @@ use cosmic::iced::wayland::popup::{destroy_popup, get_popup};
 use cosmic::iced::window::Id;
 use cosmic::iced::Limits;
 use cosmic::{Application, Element, Theme};
+use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use subscription::Updates;
 use view::Collapsed;
@@ -26,6 +27,7 @@ pub struct CosmicAppletArch {
     pacman_list_state: Collapsed,
     aur_list_state: Collapsed,
     devel_list_state: Collapsed,
+    refresh_pressed_notifier: Arc<tokio::sync::Notify>,
     last_checked: Option<DateTime<Local>>,
     errors: Option<()>,
 }
@@ -101,7 +103,7 @@ impl Application for CosmicAppletArch {
             Message::CheckUpdatesMsg(updates, time, errors) => {
                 self.handle_updates(updates, time, errors)
             }
-            Message::ForceGetUpdates => todo!(),
+            Message::ForceGetUpdates => self.handle_force_get_updates(),
             Message::ToggleCollapsible(update_type) => self.handle_toggle_collapsible(update_type),
         }
     }
@@ -146,6 +148,10 @@ impl CosmicAppletArch {
         if self.popup.as_ref() == Some(&id) {
             self.popup = None;
         }
+        Command::none()
+    }
+    fn handle_force_get_updates(&mut self) -> Command<Message> {
+        self.refresh_pressed_notifier.notify_one();
         Command::none()
     }
     fn handle_updates(

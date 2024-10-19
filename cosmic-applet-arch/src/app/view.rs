@@ -2,6 +2,7 @@ use crate::fl;
 
 use super::{CosmicAppletArch, Message};
 use arch_updates_rs::{DevelUpdate, Update};
+use chrono::MAX_DATE;
 use cosmic::{
     app::Core,
     applet::{cosmic_panel_config::PanelSize, Size},
@@ -12,6 +13,7 @@ use cosmic::{
         window::Id,
         Length, Padding,
     },
+    iced_core::text::Wrap,
     iced_widget::{column, row},
     prelude::CollectionWidget,
     theme::{self, Button},
@@ -21,6 +23,8 @@ use cosmic::{
 use itertools::Itertools;
 use std::rc::Rc;
 use std::{borrow::Borrow, num::NonZeroU32};
+
+const MAX_LINES: usize = 20;
 
 enum AppIcon {
     Loading,
@@ -72,31 +76,24 @@ pub fn view(app: &CosmicAppletArch) -> Element<Message> {
 
 // view_window is what is displayed in the popup.
 pub fn view_window(app: &CosmicAppletArch, _id: Id) -> Element<Message> {
-    const MAX_LINES: usize = 10;
-
     let cosmic::cosmic_theme::Spacing {
         space_xxs, space_s, ..
     } = theme::active().cosmic().spacing;
+    let content_list = cosmic::widget::column()
+        .spacing(space_xxs)
+        .padding([space_xxs, 0]);
 
-    let pm = app.updates.pacman.len();
-    let aur = app.updates.aur.len();
-    let dev = app.updates.devel.len();
-
-    let chain_if_overflowed = |n| {
-        if n > MAX_LINES {
-            Some(("...".to_string(), "".to_string()))
-        } else {
-            None
-        }
+    let Some(updates) = app.updates.as_ref() else {
+        let content_list = content_list.push(body_text_row(fl!("loading")));
+        return app.core.applet.popup_container(content_list).into();
     };
 
+    let pm = updates.pacman.len();
+    let aur = updates.aur.len();
+    let dev = updates.devel.len();
+
     let pacman_list = collapsible_two_column_list(
-        app.updates
-            .pacman
-            .iter()
-            .map(pretty_print_update)
-            .take(MAX_LINES)
-            .chain(chain_if_overflowed(pm)),
+        updates.pacman.iter().map(pretty_print_update),
         &app.pacman_list_state,
         fl!(
             "updates-available",
@@ -104,14 +101,10 @@ pub fn view_window(app: &CosmicAppletArch, _id: Id) -> Element<Message> {
             updateSource = "pacman"
         ),
         Message::ToggleCollapsible(crate::app::UpdateType::Pacman),
+        MAX_LINES,
     );
     let aur_list = collapsible_two_column_list(
-        app.updates
-            .aur
-            .iter()
-            .map(pretty_print_update)
-            .take(MAX_LINES)
-            .chain(chain_if_overflowed(aur)),
+        updates.aur.iter().map(pretty_print_update),
         &app.aur_list_state,
         fl!(
             "updates-available",
@@ -119,14 +112,10 @@ pub fn view_window(app: &CosmicAppletArch, _id: Id) -> Element<Message> {
             updateSource = "AUR"
         ),
         Message::ToggleCollapsible(crate::app::UpdateType::Aur),
+        MAX_LINES,
     );
     let devel_list = collapsible_two_column_list(
-        app.updates
-            .devel
-            .iter()
-            .map(pretty_print_devel_update)
-            .take(MAX_LINES)
-            .chain(chain_if_overflowed(dev)),
+        updates.devel.iter().map(pretty_print_devel_update),
         &app.devel_list_state,
         fl!(
             "updates-available",
@@ -134,25 +123,22 @@ pub fn view_window(app: &CosmicAppletArch, _id: Id) -> Element<Message> {
             updateSource = "devel"
         ),
         Message::ToggleCollapsible(crate::app::UpdateType::Devel),
+        MAX_LINES,
     );
 
     let last_checked = match app.last_checked {
         Some(t) => format!("{}", t.format("%-d/%-m %-I:%M %p")),
-        None => "Not yet".to_owned(),
+        None => fl!("not-yet"),
     };
 
     let total_updates = pm + aur + dev;
-    let content_list = cosmic::widget::column()
-        .padding(5)
-        .spacing(space_xxs)
+    let content_list = content_list
         .push_maybe((pm > 0).then_some(pacman_list))
         .push_maybe((aur > 0 && pm > 0).then_some(cosmic_applet_divider(space_s).into()))
         .push_maybe((aur > 0).then_some(aur_list))
         .push_maybe((dev > 0 && pm + aur > 0).then_some(cosmic_applet_divider(space_s).into()))
         .push_maybe((dev > 0).then_some(devel_list))
-        .push_maybe(
-            (total_updates == 0).then_some(body_text_row("No updates available".to_string())),
-        )
+        .push_maybe((total_updates == 0).then_some(body_text_row(fl!("no-updates-available"))))
         .push(cosmic_applet_divider(space_s).into())
         .push(
             cosmic::applet::menu_button(cosmic::widget::text::body(fl!(
@@ -211,15 +197,29 @@ fn errors_row(error: String) -> Element<'static, Message> {
 }
 
 fn collapsible_two_column_list<'a>(
-    text: impl Iterator<Item = (String, String)> + 'a,
+    text: impl ExactSizeIterator<Item = (String, String)> + 'a,
     collapsed: &Collapsed,
     title: String,
     on_press_mesage: Message,
+    max_items: usize,
 ) -> Element<'a, Message> {
+    let cosmic::cosmic_theme::Spacing { space_xxs, .. } = theme::active().cosmic().spacing;
+
     let icon_name = match collapsed {
         Collapsed::Collapsed => "go-down-symbolic",
         Collapsed::Expanded => "go-up-symbolic",
     };
+
+    let list_len = text.len();
+
+    let overflow_line = {
+        if list_len > max_items {
+            Some((fl!("n-more", n = (list_len - max_items)), "".to_string()))
+        } else {
+            None
+        }
+    };
+
     let heading = cosmic::applet::menu_button(row![
         cosmic::widget::text::body(title)
             .width(Length::Fill)
@@ -239,7 +239,8 @@ fn collapsible_two_column_list<'a>(
     match collapsed {
         Collapsed::Collapsed => heading.into(),
         Collapsed::Expanded => {
-            let children = two_column_text_widget(text);
+            let children =
+                two_column_text_widget(text.take(max_items).chain(overflow_line), space_xxs);
             column![heading, children].into()
         }
     }
@@ -248,10 +249,13 @@ fn collapsible_two_column_list<'a>(
 // TODO: See if I can return Widget instead of Element.
 fn two_column_text_widget<'a>(
     text: impl Iterator<Item = (String, String)> + 'a,
+    left_margin: u16,
 ) -> Element<'a, Message> {
     cosmic::widget::column::Column::with_children(text.map(|(col1, col2)| {
         cosmic::widget::flex_row(vec![
-            cosmic::widget::text::body(col1).into(),
+            cosmic::widget::container(cosmic::widget::text::body(col1))
+                .padding([0, 0, 0, left_margin])
+                .into(),
             cosmic::widget::text::body(col2).into(),
         ])
         .justify_content(JustifyContent::SpaceBetween)
