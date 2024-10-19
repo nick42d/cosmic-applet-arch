@@ -127,7 +127,7 @@ pub fn view_window(app: &CosmicAppletArch, _id: Id) -> Element<Message> {
     );
 
     let last_checked = match app.last_checked {
-        Some(t) => format!("{}", t.format("%-d/%-m %-I:%M %p")),
+        Some(t) => format!("{}", t.format("%x %-I:%M %p")),
         None => fl!("not-yet"),
     };
 
