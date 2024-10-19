@@ -1,5 +1,8 @@
 use core::str;
-use futures::{stream::FuturesUnordered, TryStreamExt};
+use futures::{
+    stream::{FuturesOrdered, FuturesUnordered},
+    TryStreamExt,
+};
 use raur::Raur;
 use srcinfo::Srcinfo;
 use std::{
@@ -28,8 +31,10 @@ pub enum Error {
     GetIgnoredPackagesFailed,
     #[error("Head identifier too short")]
     HeadIdentifierTooShort,
-    #[error("Failed to get new aur packages")]
-    GetNewAurPackagesFailed,
+    #[error("Failed to get package from AUR `{:?}`", 0)]
+    // NOTE: Due to the API design, it's not always possible to know the name of the failed
+    // package.
+    GetAurPackageFailed(Option<String>),
     #[error("Error parsing .SRCINFO")]
     ParseErrorSrcinfo(#[from] srcinfo::Error),
     #[error("Failed to parse update from checkupdates string: `{0}`")]
@@ -110,15 +115,15 @@ pub async fn check_devel_updates(
     check_type: CheckType<Vec<DevelUpdate>>,
 ) -> Result<(Vec<DevelUpdate>, Vec<DevelUpdate>)> {
     let devel_packages = get_devel_packages().await?;
-    let devel_package_srcinfos = devel_packages
-        .into_iter()
-        .map(|pkg| get_aur_srcinfo(pkg.pkgname))
-        .collect::<FuturesUnordered<_>>()
-        // May be able to avoid this collection using stream or iterator adaptors.
-        .try_collect::<Vec<_>>()
-        .await?;
     let devel_updates = match check_type {
         CheckType::Online => {
+            let devel_package_srcinfos = devel_packages
+                .into_iter()
+                .map(|pkg| get_aur_srcinfo(pkg.pkgname))
+                .collect::<FuturesOrdered<_>>()
+                // May be able to avoid this collection using stream or iterator adaptors.
+                .try_collect::<Vec<_>>()
+                .await?;
             devel_package_srcinfos
                 .iter()
                 .flat_map(|srcinfo| {
@@ -145,17 +150,17 @@ pub async fn check_devel_updates(
                 .try_collect::<Vec<_>>()
                 .await
         }
-        CheckType::Offline(cache) => devel_package_srcinfos
+        CheckType::Offline(cache) => devel_packages
             .iter()
-            .flat_map(|srcinfo| {
+            .flat_map(|package| {
                 cache
                     .iter()
-                    .filter(|cache_package| cache_package.pkgname == srcinfo.pkg.pkgname)
+                    .filter(|cache_package| cache_package.pkgname == package.pkgname)
                     .map(move |cache_package| {
                         Ok(DevelUpdate {
-                            pkgname: srcinfo.pkg.pkgname.to_owned(),
-                            pkgver_cur: srcinfo.base.pkgver.to_owned(),
-                            pkgrel_cur: srcinfo.base.pkgrel.to_owned(),
+                            pkgname: package.pkgname.to_owned(),
+                            pkgver_cur: package.pkgver.to_owned(),
+                            pkgrel_cur: package.pkgrel.to_owned(),
                             ref_id_new: cache_package.ref_id_new.to_owned(),
                         })
                     })
@@ -165,7 +170,7 @@ pub async fn check_devel_updates(
     Ok((
         devel_updates
             .iter()
-            .filter(|update| update.pkgver_cur.contains(&update.ref_id_new))
+            .filter(|update| !update.pkgver_cur.contains(&update.ref_id_new))
             .map(ToOwned::to_owned)
             .collect::<Vec<_>>(),
         devel_updates,
@@ -193,7 +198,7 @@ pub async fn check_aur_updates(
                     .as_slice(),
             )
             .await
-            .map_err(|_| Error::GetNewAurPackagesFailed)?
+            .map_err(|_| Error::GetAurPackageFailed(None))?
             .into_iter()
             .filter_map(|new| {
                 let matching_old = &old.iter().find(|old| old.pkgname == new.name)?.clone();
@@ -308,9 +313,24 @@ async fn get_devel_packages() -> Result<Vec<Package>> {
 
 /// Get and parse the .SRCINFO for an aur package.
 async fn get_aur_srcinfo(pkgname: String) -> Result<Srcinfo> {
-    let url = format!("https://aur.archlinux.org/cgit/aur.git/plain/.SRCINFO?h={pkgname}");
+    // First we need to get the base repository from the AUR API. Since the pkgname
+    // may not be the same as the repository name (and repository can contain
+    // multiple packages).
+    let aur = raur::Handle::new();
+    let info = &aur
+        .info(&[&pkgname])
+        .await
+        .map_err(|_| Error::GetAurPackageFailed(Some(pkgname.clone())))?[0];
+    let base = &info.package_base;
+
+    let url = format!("https://aur.archlinux.org/cgit/aur.git/plain/.SRCINFO?h={base}");
     let raw = reqwest::get(url).await?.text().await?;
-    Ok(Srcinfo::from_str(&raw)?)
+    // The pkg.pkgname field of the .SRCINO is not likely to be populated, but we'll
+    // need it for later parsing, so we populate it ourself.
+    let mut srcinfo = Srcinfo::from_str(&raw)?;
+    srcinfo.pkg.pkgname = pkgname;
+
+    Ok(srcinfo)
 }
 
 /// Get head identifier for a git repo - last 7 digits from commit hash.

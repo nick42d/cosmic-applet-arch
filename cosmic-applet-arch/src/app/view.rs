@@ -280,7 +280,10 @@ fn pretty_print_update(update: &Update) -> (String, String) {
 fn pretty_print_devel_update(update: &DevelUpdate) -> (String, String) {
     (
         update.pkgname.to_string(),
-        format!("{}->*{}*", update.pkgver_cur, update.ref_id_new,),
+        format!(
+            "{}-{}->*{}*",
+            update.pkgver_cur, update.pkgrel_cur, update.ref_id_new,
+        ),
     )
 }
 
