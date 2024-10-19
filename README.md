@@ -8,6 +8,7 @@ Inspired by https://github.com/savely-krasovsky/waybar-updates and https://githu
 ## Features
  - Native COSMIC look and feel, supporting both light and dark mode.
  - pacman, AUR, and devel package upgrades shown.
+ - Set up to support localisation - to support your language please submit your `.ftl` translations to the `./cosmic-applet-arch/i18n/` directory.
 
 ## Development setup
 
