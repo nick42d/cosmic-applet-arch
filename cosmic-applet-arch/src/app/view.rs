@@ -15,7 +15,7 @@ use cosmic::{
     iced_widget::{column, row},
     theme::{self, Button},
     widget::{flex_row, settings, JustifyContent, Widget},
-    Application, Element,
+    Also, Application, Apply, Element,
 };
 use itertools::Itertools;
 use std::num::NonZeroU32;
@@ -46,7 +46,7 @@ pub fn view(app: &CosmicAppletArch) -> Element<Message> {
             AppIcon::UpdatesAvailable.to_str(),
             format!("{total_updates}"),
         )
-        .on_press_down(Message::TogglePopup)
+        .on_press(Message::TogglePopup)
         .into()
     } else {
         app.core
@@ -59,29 +59,15 @@ pub fn view(app: &CosmicAppletArch) -> Element<Message> {
 
 // view_window is what is displayed in the popup.
 pub fn view_window(app: &CosmicAppletArch, _id: Id) -> Element<Message> {
-    let theme = app.core.system_theme();
     let cosmic::cosmic_theme::Spacing {
         space_xxs, space_s, ..
     } = theme::active().cosmic().spacing;
 
-    let content_list = cosmic::widget::list_column()
-        // as cosmic::iced_style::container::StyleSheet
-        .style(theme.current_container().to_owned())
-        .padding(5)
-        .spacing(space_xxs);
     const MAX_LINES: usize = 5;
 
     let pm = app.updates.pacman.len();
     let aur = app.updates.aur.len();
     let dev = app.updates.devel.len();
-
-    let chain = |n: usize| {
-        if n > MAX_LINES {
-            Some("...".to_string())
-        } else {
-            None
-        }
-    };
 
     let pacman_list = collapsible_two_column_list(
         app.updates.pacman.iter().map(pretty_print_update),
@@ -124,38 +110,39 @@ pub fn view_window(app: &CosmicAppletArch, _id: Id) -> Element<Message> {
     };
 
     let total_updates = pm + aur + dev;
-    let content_list = if pm > 0 {
-        content_list.add(pacman_list)
-    } else {
-        content_list
-    };
-    let content_list = if aur > 0 {
-        content_list.add(aur_list)
-    } else {
-        content_list
-    };
-    let content_list = if dev > 0 {
-        content_list.add(devel_list)
-    } else {
-        content_list
-    };
-    let content_list = if total_updates == 0 {
-        content_list.add(cosmic::widget::text("No updates available"))
-    } else {
-        content_list
-    };
-    let content_list = content_list.add(
-        cosmic::applet::menu_button(cosmic::widget::text(fl!(
-            "last-checked",
-            dateTime = last_checked
-        )))
-        .on_press(Message::ForceGetUpdates),
-    );
-    let content_list = if let None = app.errors {
-        content_list.add(errors_row("Testing".to_string()))
-    } else {
-        content_list
-    };
+    let content_list = cosmic::widget::column()
+        .padding(5)
+        .spacing(space_xxs)
+        .push_maybe((pm > 0).then_some(pacman_list))
+        .push_maybe(
+            (aur > 0 && pm > 0).then_some(
+                cosmic::applet::padded_control(cosmic::widget::divider::horizontal::default())
+                    .padding([space_xxs, space_s]),
+            ),
+        )
+        .push_maybe((aur > 0).then_some(aur_list))
+        .push_maybe(
+            (dev > 0 && pm + aur > 0).then_some(
+                cosmic::applet::padded_control(cosmic::widget::divider::horizontal::default())
+                    .padding([space_xxs, space_s]),
+            ),
+        )
+        .push_maybe((dev > 0).then_some(devel_list))
+        .push_maybe(
+            (total_updates == 0).then_some(body_text_row("No updates available".to_string())),
+        )
+        .push(
+            cosmic::applet::padded_control(cosmic::widget::divider::horizontal::default())
+                .padding([space_xxs, space_s]),
+        )
+        .push(
+            cosmic::applet::menu_button(cosmic::widget::text::body(fl!(
+                "last-checked",
+                dateTime = last_checked
+            )))
+            .on_press(Message::ForceGetUpdates),
+        )
+        .push_maybe(app.errors.map(|e| errors_row("Testing".to_string())));
     app.core.applet.popup_container(content_list).into()
 }
 
@@ -175,8 +162,26 @@ impl Collapsed {
     }
 }
 
+fn body_text_row(text: String) -> Element<'static, Message> {
+    cosmic::widget::container(
+        cosmic::widget::text::body(text)
+            .width(Length::Fill)
+            .height(Length::Fixed(24.0))
+            .align_y(Vertical::Center),
+    )
+    .padding(cosmic::applet::menu_control_padding())
+    .into()
+}
+
 fn errors_row(error: String) -> Element<'static, Message> {
-    cosmic::widget::text(format!("Warning: {error}!!")).into()
+    cosmic::widget::container(
+        cosmic::widget::text::body(format!("Warning: {error}!!"))
+            .width(Length::Fill)
+            .height(Length::Fixed(24.0))
+            .align_y(Vertical::Center),
+    )
+    .padding(cosmic::applet::menu_control_padding())
+    .into()
 }
 
 fn collapsible_two_column_list<'a>(
@@ -193,7 +198,7 @@ fn collapsible_two_column_list<'a>(
         cosmic::widget::text::body(title)
             .width(Length::Fill)
             .height(Length::Fixed(24.0))
-            .vertical_alignment(Vertical::Center),
+            .align_y(Vertical::Center),
         cosmic::widget::container(
             cosmic::widget::icon::from_name(icon_name)
                 .size(16)
@@ -275,11 +280,11 @@ pub fn applet_button_with_text<'a, Message: 'static>(
         .size(suggested.0)
         .into();
     let icon = cosmic::widget::icon(icon)
-        .style(cosmic::theme::Svg::Custom(Rc::new(|theme| {
-            cosmic::iced_style::svg::Appearance {
-                color: Some(theme.cosmic().background.on.into()),
-            }
-        })))
+        // .style(cosmic::theme::Svg::Custom(Rc::new(|theme| {
+        //     cosmic::iced_style::svg::Appearance {
+        //         color: Some(theme.cosmic().background.on.into()),
+        //     }
+        // })))
         .width(Length::Fixed(suggested.0 as f32))
         .height(Length::Fixed(suggested.1 as f32))
         .into();
@@ -292,13 +297,10 @@ pub fn applet_button_with_text<'a, Message: 'static>(
         Size::Hardcoded(_) => cosmic::widget::text,
     };
     let text = t(text.to_string()).font(cosmic::font::default());
-    // let text = t(text.to_string()).font(cosmic::font::default());
-    let text_width = Widget::<Message, _, _>::size(&text).width;
-    eprintln!("{:?}", text_width);
     cosmic::widget::button::custom(
         cosmic::widget::layer_container(
             cosmic::widget::row::with_children(vec![icon, text.into()])
-                .align_items(cosmic::iced::Alignment::Center)
+                .align_y(cosmic::iced::Alignment::Center)
                 .spacing(2),
         )
         .align_x(Horizontal::Center)
@@ -307,5 +309,5 @@ pub fn applet_button_with_text<'a, Message: 'static>(
     )
     // TODO: Decide what to do if vertical.
     .height(Length::Fixed(configured_height.get() as f32))
-    .style(Button::AppletIcon)
+    // .style(Button::AppletIcon)
 }

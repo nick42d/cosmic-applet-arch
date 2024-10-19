@@ -4,6 +4,7 @@ Exec=cosmic-applet-arch
 Terminal=false
 Type=Application
 StartupNotify=true
+# Translators: Do NOT translate or transliterate this text (this is an icon file name)!
 Icon=com.nick42d.CosmicAppletArch
 Categories=COSMIC;Utility;
 Keywords=Arch;Package;

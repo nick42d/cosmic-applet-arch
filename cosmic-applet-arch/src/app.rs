@@ -1,9 +1,8 @@
-use cosmic::app::{Command, Core};
+use cosmic::app::{Core, Task};
 use cosmic::cosmic_theme::palette::IntoColor;
-use cosmic::iced::wayland::popup::{destroy_popup, get_popup};
 use cosmic::iced::window::Id;
 use cosmic::iced::Limits;
-use cosmic::iced_style::application;
+use cosmic::iced_winit::commands::popup::{destroy_popup, get_popup};
 use cosmic::{Application, Element, Theme};
 use std::time::{Duration, SystemTime};
 use subscription::Updates;
@@ -65,19 +64,19 @@ impl Application for CosmicAppletArch {
         &mut self.core
     }
     // Use default cosmic applet style
-    fn style(&self) -> Option<<Theme as application::StyleSheet>::Style> {
+    fn style(&self) -> Option<cosmic::iced_runtime::Appearance> {
         Some(cosmic::applet::style())
     }
     // Entry point for libcosmic init.
     // Core is passed by libcosmic, and caller can pass some state in Flags.
     // On load we can immediately run an async task by returning a Command as the
     // second component of the tuple.
-    fn init(core: Core, _flags: Self::Flags) -> (Self, Command<Self::Message>) {
+    fn init(core: Core, _flags: Self::Flags) -> (Self, Task<Self::Message>) {
         let app = CosmicAppletArch {
             core,
             ..Default::default()
         };
-        (app, Command::none())
+        (app, Task::none())
     }
     fn on_close_requested(&self, id: Id) -> Option<Message> {
         Some(Message::PopupClosed(id))
@@ -92,7 +91,7 @@ impl Application for CosmicAppletArch {
     }
     // NOTE: Commands may be returned for asynchronous execution on a
     // background thread managed by the application's executor.
-    fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
+    fn update(&mut self, message: Self::Message) -> Task<Self::Message> {
         match message {
             Message::TogglePopup => self.handle_toggle_popup(),
             Message::PopupClosed(id) => self.handle_popup_closed(id),
@@ -110,7 +109,7 @@ impl Application for CosmicAppletArch {
 }
 
 impl CosmicAppletArch {
-    fn handle_toggle_popup(&mut self) -> Command<Message> {
+    fn handle_toggle_popup(&mut self) -> Task<Message> {
         if let Some(p) = self.popup.take() {
             destroy_popup(p)
         } else {
@@ -122,7 +121,7 @@ impl CosmicAppletArch {
             let mut popup_settings =
                 self.core
                     .applet
-                    .get_popup_settings(Id::MAIN, new_id, None, None, None);
+                    .get_popup_settings(Id::RESERVED, new_id, None, None, None);
             popup_settings.positioner.size_limits = Limits::NONE
                 .max_width(372.0)
                 .min_width(300.0)
@@ -131,26 +130,26 @@ impl CosmicAppletArch {
             get_popup(popup_settings)
         }
     }
-    fn handle_toggle_collapsible(&mut self, update_type: UpdateType) -> Command<Message> {
+    fn handle_toggle_collapsible(&mut self, update_type: UpdateType) -> Task<Message> {
         match update_type {
             UpdateType::Aur => self.aur_list_state = self.aur_list_state.toggle(),
             UpdateType::Pacman => self.pacman_list_state = self.pacman_list_state.toggle(),
             UpdateType::Devel => self.devel_list_state = self.devel_list_state.toggle(),
         }
-        Command::none()
+        Task::none()
     }
-    fn handle_popup_closed(&mut self, id: Id) -> Command<Message> {
+    fn handle_popup_closed(&mut self, id: Id) -> Task<Message> {
         if self.popup.as_ref() == Some(&id) {
             self.popup = None;
         }
-        Command::none()
+        Task::none()
     }
     fn handle_updates(
         &mut self,
         updates: Updates,
         time: Option<OffsetDateTime>,
         errors: Option<()>,
-    ) -> Command<Message> {
+    ) -> Task<Message> {
         self.updates = updates;
         if let Some(time) = time {
             self.last_checked = Some(time);
@@ -158,6 +157,6 @@ impl CosmicAppletArch {
         if let Some(errors) = errors {
             self.errors = Some(errors);
         }
-        Command::none()
+        Task::none()
     }
 }

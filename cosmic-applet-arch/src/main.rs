@@ -13,5 +13,5 @@ mod core;
 /// - `()` is the flags that your app needs to use before it starts. If your app
 ///   does not need any flags, you can pass in `()`.
 fn main() -> cosmic::iced::Result {
-    cosmic::applet::run::<CosmicAppletArch>(true, ())
+    cosmic::applet::run::<CosmicAppletArch>(())
 }
