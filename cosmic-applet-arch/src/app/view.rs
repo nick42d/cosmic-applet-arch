@@ -114,12 +114,11 @@ pub fn view_window(app: &CosmicAppletArch, _id: Id) -> Element<Message> {
         .padding(5)
         .spacing(space_xxs)
         .push_maybe((pm > 0).then_some(pacman_list))
-        .push_maybe(
-            (aur > 0 && pm > 0).then_some(
-                cosmic::applet::padded_control(cosmic::widget::divider::horizontal::default())
-                    .padding([space_xxs, space_s]),
-            ),
-        )
+        .push_maybe((aur > 0 && pm > 0).then_some(
+            // cosmic::applet::padded_control(cosmic::widget::divider::horizontal::default())
+            //     .padding([space_xxs, space_s]),
+            cosmic::widget::divider::horizontal::default(),
+        ))
         .push_maybe((aur > 0).then_some(aur_list))
         .push_maybe(
             (dev > 0 && pm + aur > 0).then_some(
@@ -225,10 +224,11 @@ fn two_column_text_widget<'a>(
 ) -> Element<'a, Message> {
     cosmic::widget::column::Column::with_children(text.map(|(col1, col2)| {
         cosmic::widget::flex_row(vec![
-            cosmic::widget::text(col1).into(),
-            cosmic::widget::text(col2).into(),
+            cosmic::widget::text::body(col1).into(),
+            cosmic::widget::text::body(col2).into(),
         ])
         .justify_content(JustifyContent::SpaceBetween)
+        .padding(cosmic::applet::menu_control_padding())
         .into()
     }))
     .into()
@@ -309,5 +309,5 @@ pub fn applet_button_with_text<'a, Message: 'static>(
     )
     // TODO: Decide what to do if vertical.
     .height(Length::Fixed(configured_height.get() as f32))
-    // .style(Button::AppletIcon)
+    .class(Button::AppletIcon)
 }
