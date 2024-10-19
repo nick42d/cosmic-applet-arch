@@ -23,6 +23,8 @@ use std::rc::Rc;
 use std::{borrow::Borrow, num::NonZeroU32};
 
 enum AppIcon {
+    Loading,
+    Error,
     UpdatesAvailable,
     UpToDate,
 }
@@ -32,13 +34,24 @@ impl AppIcon {
         match self {
             AppIcon::UpdatesAvailable => "software-update-available-symbolic",
             AppIcon::UpToDate => "emblem-default-symbolic",
+            AppIcon::Loading => "emblem-synchronizing-symbolic",
+            AppIcon::Error => "dialog-error-symbolic",
         }
     }
 }
 
 // view is what is displayed in the toolbar when run as an applet.
 pub fn view(app: &CosmicAppletArch) -> Element<Message> {
-    let total_updates = app.updates.pacman.len() + app.updates.aur.len() + app.updates.devel.len();
+    let Some(updates) = app.updates.as_ref() else {
+        return app
+            .core
+            .applet
+            .icon_button(AppIcon::Loading.to_str())
+            .on_press_down(Message::TogglePopup)
+            .into();
+    };
+
+    let total_updates = updates.pacman.len() + updates.aur.len() + updates.devel.len();
 
     if total_updates > 0 {
         applet_button_with_text(

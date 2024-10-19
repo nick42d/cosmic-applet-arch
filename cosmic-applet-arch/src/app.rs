@@ -22,7 +22,7 @@ pub struct CosmicAppletArch {
     core: Core,
     /// Default field for cosmic applet
     popup: Option<Id>,
-    updates: Updates,
+    updates: Option<Updates>,
     pacman_list_state: Collapsed,
     aur_list_state: Collapsed,
     devel_list_state: Collapsed,
@@ -154,7 +154,7 @@ impl CosmicAppletArch {
         time: Option<DateTime<Local>>,
         errors: Option<()>,
     ) -> Command<Message> {
-        self.updates = updates;
+        self.updates = Some(updates);
         if let Some(time) = time {
             self.last_checked = Some(time);
         }
