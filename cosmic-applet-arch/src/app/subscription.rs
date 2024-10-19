@@ -1,16 +1,15 @@
 use super::{CosmicAppletArch, Message, BUF_SIZE, CYCLES, INTERVAL};
 use arch_updates_rs::{CheckType, DevelUpdate, Update};
-use cosmic::{iced::futures::SinkExt, iced_futures::subscription};
+use cosmic::{
+    iced::futures::{channel::mpsc, SinkExt},
+    iced_futures::subscription,
+};
 use time::OffsetDateTime;
 use tokio::join;
 
 // Long running stream of messages to the app.
 pub fn subscription(_app: &CosmicAppletArch) -> cosmic::iced::Subscription<Message> {
-    subscription::Subscription::run(worker)
-}
-
-fn worker() -> impl cosmic::iced::futures::Stream<Item = Message> {
-    cosmic::iced_futures::stream::channel(BUF_SIZE, |mut tx| async move {
+    let worker = |mut tx: mpsc::Sender<Message>| async move {
         let mut counter = 0;
         let mut cache = CacheState::default();
         loop {
@@ -37,7 +36,9 @@ fn worker() -> impl cosmic::iced::futures::Stream<Item = Message> {
             }
             tokio::time::sleep(INTERVAL).await;
         }
-    })
+    };
+    // subscription::Subscription::run(worker)
+    cosmic::iced::subscription::channel(0, BUF_SIZE, worker)
 }
 
 #[derive(Default)]

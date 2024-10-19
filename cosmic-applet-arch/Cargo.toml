@@ -15,8 +15,10 @@ tokio = { version = "1.40.0", features = ["full"] }
 
 [dependencies.libcosmic]
 git = "https://github.com/pop-os/libcosmic.git"
+# Commit pegged due to removal of autosize - expecting to see a solution upstream in cosmic time applet and then we can update.
+rev = "9e064e7"
 default-features = false
-features = ["applet", "tokio", "wayland", "applet-token", "desktop-systemd-scope", "dbus-config"]
+features = ["applet", "tokio", "wayland"]
 
 [dependencies.i18n-embed]
 version = "0.14"

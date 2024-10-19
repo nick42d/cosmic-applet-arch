@@ -13,13 +13,14 @@ use cosmic::{
         Length, Padding,
     },
     iced_widget::{column, row},
+    prelude::CollectionWidget,
     theme::{self, Button},
     widget::{flex_row, settings, JustifyContent, Widget},
     Also, Application, Apply, Element,
 };
 use itertools::Itertools;
-use std::num::NonZeroU32;
 use std::rc::Rc;
+use std::{borrow::Borrow, num::NonZeroU32};
 use time::OffsetDateTime;
 
 enum AppIcon {
@@ -46,13 +47,13 @@ pub fn view(app: &CosmicAppletArch) -> Element<Message> {
             AppIcon::UpdatesAvailable.to_str(),
             format!("{total_updates}"),
         )
-        .on_press(Message::TogglePopup)
+        .on_press_down(Message::TogglePopup)
         .into()
     } else {
         app.core
             .applet
             .icon_button(AppIcon::UpToDate.to_str())
-            .on_press(Message::TogglePopup)
+            .on_press_down(Message::TogglePopup)
             .into()
     }
 }
@@ -123,7 +124,7 @@ pub fn view_window(app: &CosmicAppletArch, _id: Id) -> Element<Message> {
         .push_maybe(
             (dev > 0 && pm + aur > 0).then_some(
                 cosmic::applet::padded_control(cosmic::widget::divider::horizontal::default())
-                    .padding([space_xxs, space_s]),
+                    .padding([space_xxs, 0]),
             ),
         )
         .push_maybe((dev > 0).then_some(devel_list))
@@ -132,7 +133,7 @@ pub fn view_window(app: &CosmicAppletArch, _id: Id) -> Element<Message> {
         )
         .push(
             cosmic::applet::padded_control(cosmic::widget::divider::horizontal::default())
-                .padding([space_xxs, space_s]),
+                .padding([space_xxs, 0]),
         )
         .push(
             cosmic::applet::menu_button(cosmic::widget::text::body(fl!(
@@ -166,7 +167,7 @@ fn body_text_row(text: String) -> Element<'static, Message> {
         cosmic::widget::text::body(text)
             .width(Length::Fill)
             .height(Length::Fixed(24.0))
-            .align_y(Vertical::Center),
+            .vertical_alignment(Vertical::Center),
     )
     .padding(cosmic::applet::menu_control_padding())
     .into()
@@ -177,7 +178,7 @@ fn errors_row(error: String) -> Element<'static, Message> {
         cosmic::widget::text::body(format!("Warning: {error}!!"))
             .width(Length::Fill)
             .height(Length::Fixed(24.0))
-            .align_y(Vertical::Center),
+            .vertical_alignment(Vertical::Center),
     )
     .padding(cosmic::applet::menu_control_padding())
     .into()
@@ -197,7 +198,7 @@ fn collapsible_two_column_list<'a>(
         cosmic::widget::text::body(title)
             .width(Length::Fill)
             .height(Length::Fixed(24.0))
-            .align_y(Vertical::Center),
+            .vertical_alignment(Vertical::Center),
         cosmic::widget::container(
             cosmic::widget::icon::from_name(icon_name)
                 .size(16)
@@ -280,8 +281,13 @@ pub fn applet_button_with_text<'a, Message: 'static>(
         .size(suggested.0)
         .into();
     let icon = cosmic::widget::icon(icon)
-        // .style(cosmic::theme::Svg::Custom(Rc::new(|theme| {
-        //     cosmic::iced_style::svg::Appearance {
+        .style(cosmic::theme::Svg::Custom(Rc::new(|theme| {
+            cosmic::widget::svg::Appearance {
+                color: Some(theme.cosmic().background.on.into()),
+            }
+        })))
+        // .class(cosmic::theme::Svg::Custom(Rc::new(|theme| {
+        //     cosmic::widget::svg::Style {
         //         color: Some(theme.cosmic().background.on.into()),
         //     }
         // })))
@@ -298,9 +304,9 @@ pub fn applet_button_with_text<'a, Message: 'static>(
     };
     let text = t(text.to_string()).font(cosmic::font::default());
     cosmic::widget::button::custom(
-        cosmic::widget::layer_container(
+        cosmic::widget::container(
             cosmic::widget::row::with_children(vec![icon, text.into()])
-                .align_y(cosmic::iced::Alignment::Center)
+                .align_items(cosmic::iced::Alignment::Center)
                 .spacing(2),
         )
         .align_x(Horizontal::Center)
@@ -309,5 +315,5 @@ pub fn applet_button_with_text<'a, Message: 'static>(
     )
     // TODO: Decide what to do if vertical.
     .height(Length::Fixed(configured_height.get() as f32))
-    .class(Button::AppletIcon)
+    .style(Button::AppletIcon)
 }
