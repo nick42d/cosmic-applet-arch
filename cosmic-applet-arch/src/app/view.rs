@@ -2,27 +2,22 @@ use crate::fl;
 
 use super::{CosmicAppletArch, Message};
 use arch_updates_rs::{DevelUpdate, Update};
-use chrono::MAX_DATE;
 use cosmic::{
     app::Core,
     applet::{cosmic_panel_config::PanelSize, Size},
-    cosmic_theme::palette::convert::TryIntoColor,
     iced::{
         alignment::{Horizontal, Vertical},
-        widget,
         window::Id,
-        Length, Padding,
+        Length,
     },
-    iced_core::text::Wrap,
     iced_widget::{column, row},
     prelude::CollectionWidget,
     theme::{self, Button},
-    widget::{flex_row, settings, JustifyContent, Widget},
-    Also, Application, Apply, Element,
+    widget::{JustifyContent, Widget},
+    Application, Element,
 };
-use itertools::Itertools;
+use std::num::NonZeroU32;
 use std::rc::Rc;
-use std::{borrow::Borrow, num::NonZeroU32};
 
 const MAX_LINES: usize = 20;
 

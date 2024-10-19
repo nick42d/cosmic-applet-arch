@@ -1,12 +1,7 @@
-use std::time::Duration;
-
 use super::{CosmicAppletArch, Message, CYCLES, INTERVAL, SUBSCRIPTION_BUF_SIZE};
 use arch_updates_rs::{CheckType, DevelUpdate, Update};
 use chrono::Local;
-use cosmic::{
-    iced::futures::{channel::mpsc, SinkExt},
-    iced_futures::subscription,
-};
+use cosmic::iced::futures::{channel::mpsc, SinkExt};
 use tokio::join;
 
 // Long running stream of messages to the app.
@@ -61,27 +56,6 @@ pub fn subscription(app: &CosmicAppletArch) -> cosmic::iced::Subscription<Messag
     };
     // subscription::Subscription::run(worker)
     cosmic::iced::subscription::channel(0, SUBSCRIPTION_BUF_SIZE, worker)
-}
-
-struct Ticker {
-    rx: tokio::sync::mpsc::Receiver<()>,
-}
-
-impl Ticker {
-    fn new(interval: Duration) -> Self {
-        let (tx, rx) = tokio::sync::mpsc::channel::<()>(SUBSCRIPTION_BUF_SIZE);
-        let mut interval = tokio::time::interval(INTERVAL);
-        tokio::spawn(async move {
-            loop {
-                interval.tick().await;
-                // Ignore error to send - if this happens, either subscriber has crashed, or
-                // buffer is full (meaning worker has enough work to do and we don't need to
-                // send more :) )
-                let _ = tx.send(()).await;
-            }
-        });
-        Ticker { rx }
-    }
 }
 
 #[derive(Default)]
