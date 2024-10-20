@@ -114,7 +114,7 @@ async fn get_updates_offline(cache: CacheState) -> arch_updates_rs::Result<(Upda
     let (devel, devel_cache) = devel?;
     Ok((
         Updates {
-            pacman: pacman.unwrap(),
+            pacman: pacman?,
             aur,
             devel,
         },
@@ -135,7 +135,7 @@ async fn get_updates_online() -> arch_updates_rs::Result<(Updates, CacheState)> 
     let (devel, devel_cache) = devel?;
     Ok((
         Updates {
-            pacman: pacman.unwrap(),
+            pacman: pacman?,
             aur,
             devel,
         },
