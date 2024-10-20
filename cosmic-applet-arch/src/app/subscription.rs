@@ -13,6 +13,7 @@ pub fn subscription(app: &CosmicAppletArch) -> cosmic::iced::Subscription<Messag
         let mut counter = 0;
         let mut cache = CacheState::default();
         let mut interval = tokio::time::interval(INTERVAL);
+        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
             let notified = notifier.notified();
             tokio::select! {

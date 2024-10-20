@@ -50,6 +50,12 @@ pub enum CheckType<Cache> {
     Offline(Cache),
 }
 
+#[derive(Debug)]
+pub struct UpdateCheckOutcome<T> {
+    pub updates: Result<Vec<T>>,
+    pub cache: Result<Vec<T>>,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Update {
     pub pkgname: String,
@@ -177,13 +183,15 @@ pub async fn check_devel_updates(
     ))
 }
 
-/// Check if any packages ending in `DEVEL_SUFFIXES` are up to date.
+/// Check if any locally installed packages are up to date.
 /// Returns a tuple of:
 ///  - Packages that are not up to date.
-///  - Latest version of all devel packages - for offline use. Note, if
-///    CheckType was Offline, this simple returns the same cache back as nothing
-///    has changed.
+///  - Latest version of all aur packages - for offline use. Note, if CheckType
+///    was Offline, this simple returns the same cache back as nothing has
+///    changed.
 // TODO: Consider if devel packages should be filtered entirely.
+// XXX: If we've got locally installed packages that aren't from the AUR,
+// currently this will fail.
 pub async fn check_aur_updates(
     check_type: CheckType<Vec<Update>>,
 ) -> Result<(Vec<Update>, Vec<Update>)> {
