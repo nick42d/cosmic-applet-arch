@@ -41,21 +41,33 @@ impl AppIcon {
 
 // view is what is displayed in the toolbar when run as an applet.
 pub fn view(app: &CosmicAppletArch) -> Element<Message> {
+    let total_updates = updates.pacman.len() + updates.aur.len() + updates.devel.len();
+
+    let icon = if app.error.is_some() {
+        AppIcon::Error
+    } else if total_updates > 0 {
+        AppIcon::UpdatesAvailable
+    } else if app.updates.is_none() {
+        AppIcon::Loading
+    } else {
+        AppIcon::UpToDate
+    }
+        
+    
     let Some(updates) = app.updates.as_ref() else {
         return app
             .core
             .applet
-            .icon_button(AppIcon::Loading.to_str())
+            .icon_button(icon.to_str())
             .on_press_down(Message::TogglePopup)
             .into();
     };
 
-    let total_updates = updates.pacman.len() + updates.aur.len() + updates.devel.len();
 
     if total_updates > 0 {
         applet_button_with_text(
             app.core(),
-            AppIcon::UpdatesAvailable.to_str(),
+            icon.to_str(),
             format!("{total_updates}"),
         )
         .on_press_down(Message::TogglePopup)
@@ -63,7 +75,7 @@ pub fn view(app: &CosmicAppletArch) -> Element<Message> {
     } else {
         app.core
             .applet
-            .icon_button(AppIcon::UpToDate.to_str())
+            .icon_button(icon.to_str())
             .on_press_down(Message::TogglePopup)
             .into()
     }
@@ -142,7 +154,7 @@ pub fn view_window(app: &CosmicAppletArch, _id: Id) -> Element<Message> {
             )))
             .on_press(Message::ForceGetUpdates),
         )
-        .push_maybe(app.errors.map(|e| errors_row("Testing".to_string())));
+        .push_maybe(app.error.as_ref().map(|e| errors_row(format!("{e}"))));
     app.core.applet.popup_container(content_list).into()
 }
 

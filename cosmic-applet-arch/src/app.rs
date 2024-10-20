@@ -31,7 +31,7 @@ pub struct CosmicAppletArch {
     devel_list_state: Collapsed,
     refresh_pressed_notifier: Arc<tokio::sync::Notify>,
     last_checked: Option<DateTime<Local>>,
-    errors: Option<()>,
+    error: Option<Arc<arch_updates_rs::Error>>,
 }
 
 #[derive(Debug, Clone)]
@@ -43,8 +43,8 @@ pub enum Message {
     CheckUpdatesMsg {
         updates: Updates,
         checked_online_time: Option<DateTime<Local>>,
-        errors: Option<()>,
     },
+    CheckUpdatesErrorsMsg(Arc<arch_updates_rs::Error>),
 }
 
 #[derive(Clone, Debug)]
@@ -108,10 +108,10 @@ impl Application for CosmicAppletArch {
             Message::CheckUpdatesMsg {
                 updates,
                 checked_online_time,
-                errors,
-            } => self.handle_updates(updates, checked_online_time, errors),
+            } => self.handle_updates(updates, checked_online_time),
             Message::ForceGetUpdates => self.handle_force_get_updates(),
             Message::ToggleCollapsible(update_type) => self.handle_toggle_collapsible(update_type),
+            Message::CheckUpdatesErrorsMsg(e) => self.handle_update_error(e),
         }
     }
     // Long running stream of messages to the app.
@@ -161,19 +161,20 @@ impl CosmicAppletArch {
         self.refresh_pressed_notifier.notify_one();
         Command::none()
     }
+    fn handle_update_error(&mut self, error: Arc<arch_updates_rs::Error>) -> Command<Message> {
+        self.error = Some(error);
+        Command::none()
+    }
     fn handle_updates(
         &mut self,
         updates: Updates,
         time: Option<DateTime<Local>>,
-        errors: Option<()>,
     ) -> Command<Message> {
         self.updates = Some(updates);
         if let Some(time) = time {
             self.last_checked = Some(time);
         }
-        if let Some(errors) = errors {
-            self.errors = Some(errors);
-        }
+        self.error = None;
         Command::none()
     }
 }

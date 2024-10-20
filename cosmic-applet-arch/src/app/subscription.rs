@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use super::{CosmicAppletArch, Message, CYCLES, INTERVAL, SUBSCRIPTION_BUF_SIZE};
 use arch_updates_rs::{CheckType, DevelUpdate, Update};
 use chrono::Local;
@@ -17,38 +19,56 @@ pub fn subscription(app: &CosmicAppletArch) -> cosmic::iced::Subscription<Messag
                 _ = interval.tick() => {
                     let check_type = match counter {
                         0 => arch_updates_rs::CheckType::Online,
-                        _ => arch_updates_rs::CheckType::Offline(cache),
+                        // The reason we clone on every loop, is because the cache isn't returned if the check errors.
+                        // TODO: This should be able to be resolved by modifying the library.
+                        _ => arch_updates_rs::CheckType::Offline(cache.clone()),
                     };
-                    let (updates, cache_tmp) = get_updates_all(check_type).await;
-                    cache = cache_tmp;
+                    let updates = get_updates_all(check_type).await;
                     let checked_online_time =
                         if counter == 0 {
                             Some(Local::now())
                         } else {
                             None
                         };
-                    tx.send(Message::CheckUpdatesMsg{
-                        updates,
-                        checked_online_time,
-                        errors: None,
-                    })
-                    .await
-                    .unwrap();
+                    match updates {
+                        Ok((updates, cache_tmp)) => {
+                            cache = cache_tmp;
+                            tx.send(Message::CheckUpdatesMsg{
+                                updates,
+                                checked_online_time,
+                            })
+                            .await
+                            .unwrap_or_else(|e| eprintln!("Error {e} sending Arch update status - maybe the applet has been dropped."))
+                        },
+                        Err(e) => {
+                            tx.send(Message::CheckUpdatesErrorsMsg(Arc::new(e)))
+                            .await
+                            .unwrap_or_else(|e| eprintln!("Error {e} sending Arch update status - maybe the applet has been dropped."))
+                        },
+                    }
                     counter += 1;
                     if counter > CYCLES {
                         counter = 0
                     }
                 }
                 _ = notified => {
-                    let (updates, cache_tmp) = get_updates_all(CheckType::Online).await;
-                    cache = cache_tmp;
-                    tx.send(Message::CheckUpdatesMsg{
-                        updates,
-                        checked_online_time: Some(Local::now()),
-                        errors: None,
-                    })
-                    .await
-                    .unwrap();
+                    let updates = get_updates_all(CheckType::Online).await;
+                    match updates {
+                        Ok((updates, cache_tmp)) => {
+                            cache = cache_tmp;
+                            tx.send(Message::CheckUpdatesMsg{
+                                updates,
+                                checked_online_time: Some(Local::now()),
+                            })
+                            .await
+                            .unwrap_or_else(|e| eprintln!("Error {e} sending Arch update status - maybe the applet has been dropped."))
+                        },
+                        Err(e) => {
+                            tx.send(Message::CheckUpdatesErrorsMsg(Arc::new(e)))
+                            .await
+                            .unwrap_or_else(|e| eprintln!("Error {e} sending Arch update status - maybe the applet has been dropped."))
+                        },
+                    }
                     counter = 1;
                 }
             }
@@ -58,7 +78,7 @@ pub fn subscription(app: &CosmicAppletArch) -> cosmic::iced::Subscription<Messag
     cosmic::iced::subscription::channel(0, SUBSCRIPTION_BUF_SIZE, worker)
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct CacheState {
     aur_cache: Vec<Update>,
     devel_cache: Vec<DevelUpdate>,
@@ -71,14 +91,16 @@ pub struct Updates {
     pub devel: Vec<DevelUpdate>,
 }
 
-async fn get_updates_all(check_type: CheckType<CacheState>) -> (Updates, CacheState) {
+async fn get_updates_all(
+    check_type: CheckType<CacheState>,
+) -> arch_updates_rs::Result<(Updates, CacheState)> {
     match check_type {
         CheckType::Online => get_updates_online().await,
         CheckType::Offline(cache) => get_updates_offline(cache).await,
     }
 }
 
-async fn get_updates_offline(cache: CacheState) -> (Updates, CacheState) {
+async fn get_updates_offline(cache: CacheState) -> arch_updates_rs::Result<(Updates, CacheState)> {
     let CacheState {
         aur_cache,
         devel_cache,
@@ -88,9 +110,9 @@ async fn get_updates_offline(cache: CacheState) -> (Updates, CacheState) {
         arch_updates_rs::check_aur_updates(CheckType::Offline(aur_cache)),
         arch_updates_rs::check_devel_updates(CheckType::Offline(devel_cache)),
     );
-    let (aur, aur_cache) = aur.unwrap();
-    let (devel, devel_cache) = devel.unwrap();
-    (
+    let (aur, aur_cache) = aur?;
+    let (devel, devel_cache) = devel?;
+    Ok((
         Updates {
             pacman: pacman.unwrap(),
             aur,
@@ -100,18 +122,18 @@ async fn get_updates_offline(cache: CacheState) -> (Updates, CacheState) {
             aur_cache,
             devel_cache,
         },
-    )
+    ))
 }
 
-async fn get_updates_online() -> (Updates, CacheState) {
+async fn get_updates_online() -> arch_updates_rs::Result<(Updates, CacheState)> {
     let (pacman, aur, devel) = join!(
         arch_updates_rs::check_updates(CheckType::Online),
         arch_updates_rs::check_aur_updates(CheckType::Online),
         arch_updates_rs::check_devel_updates(CheckType::Online),
     );
-    let (aur, aur_cache) = aur.unwrap();
-    let (devel, devel_cache) = devel.unwrap();
-    (
+    let (aur, aur_cache) = aur?;
+    let (devel, devel_cache) = devel?;
+    Ok((
         Updates {
             pacman: pacman.unwrap(),
             aur,
@@ -121,5 +143,5 @@ async fn get_updates_online() -> (Updates, CacheState) {
             aur_cache,
             devel_cache,
         },
-    )
+    ))
 }
