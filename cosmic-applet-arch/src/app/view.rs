@@ -41,37 +41,29 @@ impl AppIcon {
 
 // view is what is displayed in the toolbar when run as an applet.
 pub fn view(app: &CosmicAppletArch) -> Element<Message> {
+    let Some(updates) = app.updates.as_ref() else {
+        return app
+            .core
+            .applet
+            .icon_button(AppIcon::Loading.to_str())
+            .on_press_down(Message::TogglePopup)
+            .into();
+    };
+
     let total_updates = updates.pacman.len() + updates.aur.len() + updates.devel.len();
 
     let icon = if app.error.is_some() {
         AppIcon::Error
     } else if total_updates > 0 {
         AppIcon::UpdatesAvailable
-    } else if app.updates.is_none() {
-        AppIcon::Loading
     } else {
         AppIcon::UpToDate
-    }
-        
-    
-    let Some(updates) = app.updates.as_ref() else {
-        return app
-            .core
-            .applet
-            .icon_button(icon.to_str())
-            .on_press_down(Message::TogglePopup)
-            .into();
     };
 
-
     if total_updates > 0 {
-        applet_button_with_text(
-            app.core(),
-            icon.to_str(),
-            format!("{total_updates}"),
-        )
-        .on_press_down(Message::TogglePopup)
-        .into()
+        applet_button_with_text(app.core(), icon.to_str(), format!("{total_updates}"))
+            .on_press_down(Message::TogglePopup)
+            .into()
     } else {
         app.core
             .applet
