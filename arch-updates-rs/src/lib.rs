@@ -31,9 +31,10 @@ pub enum Error {
     GetIgnoredPackagesFailed,
     #[error("Head identifier too short")]
     HeadIdentifierTooShort,
-    #[error("Failed to get package from AUR `{:?}`", 0)]
-    // NOTE: Due to the API design, it's not always possible to know the name of the failed
-    // package.
+    #[error("Failed to get package from AUR `{0:?}`")]
+    /// # Note
+    /// Due to the API design, it's not always possible to know the name of the
+    /// aur package we failed to get.
     GetAurPackageFailed(Option<String>),
     #[error("Error parsing .SRCINFO")]
     ParseErrorSrcinfo(#[from] srcinfo::Error),
