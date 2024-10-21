@@ -1,3 +1,5 @@
+use crate::app::TIMEOUT;
+
 use super::{CosmicAppletArch, Message, CYCLES, INTERVAL, SUBSCRIPTION_BUF_SIZE};
 use arch_updates_rs::{CheckType, DevelUpdate, Update};
 use chrono::{DateTime, Local};
@@ -54,7 +56,7 @@ pub fn subscription(app: &CosmicAppletArch) -> cosmic::iced::Subscription<Messag
                     }
                     let updates = match (&check_type, &cache) {
                         (CheckType::Online, _) => {
-                            match flat_erased_timeout(INTERVAL, get_updates_online()).await {
+                            match flat_erased_timeout(TIMEOUT, get_updates_online()).await {
                                 Err(e) => {
                                     cache = None;
                                     send_error(&mut tx, e).await;
@@ -67,7 +69,7 @@ pub fn subscription(app: &CosmicAppletArch) -> cosmic::iced::Subscription<Messag
                             }
                         }
                         (CheckType::Offline, Some(cache)) => {
-                            match flat_erased_timeout(INTERVAL, get_updates_offline(cache)).await {
+                            match flat_erased_timeout(TIMEOUT, get_updates_offline(cache)).await {
                                 Err(e) => {
                                     send_error(&mut tx, e).await;
                                     continue;
@@ -85,7 +87,7 @@ pub fn subscription(app: &CosmicAppletArch) -> cosmic::iced::Subscription<Messag
                 }
                 _ = notified => {
                     counter = 1;
-                    let updates = flat_erased_timeout(INTERVAL, get_updates_online()).await;
+                    let updates = flat_erased_timeout(TIMEOUT, get_updates_online()).await;
                     match updates {
                         Ok((updates, cache_tmp)) => {
                             cache = Some(cache_tmp);

@@ -1,8 +1,5 @@
 use core::str;
-use futures::{
-    stream::{FuturesOrdered, FuturesUnordered},
-    TryStreamExt,
-};
+use futures::{stream::FuturesOrdered, StreamExt, TryStreamExt};
 use raur::Raur;
 use srcinfo::Srcinfo;
 use std::{
@@ -121,36 +118,39 @@ pub async fn check_updates(check_type: CheckType) -> Result<Vec<Update>> {
 ///    https://wiki.archlinux.org/title/VCS_package_guidelines
 pub async fn check_devel_updates_online() -> Result<(Vec<DevelUpdate>, Vec<DevelUpdate>)> {
     let devel_packages = get_devel_packages().await?;
-    let devel_package_srcinfos = devel_packages
-        .into_iter()
-        .map(|pkg| get_aur_srcinfo(pkg.pkgname))
-        .collect::<FuturesOrdered<_>>()
-        // May be able to avoid this collection using stream or iterator adaptors.
-        .try_collect::<Vec<_>>()
-        .await?;
-    let devel_updates = devel_package_srcinfos
-        .iter()
-        .flat_map(|srcinfo| {
-            srcinfo
-                .base
-                .source
-                .iter()
-                .flat_map(|arch| arch.vec.iter())
-                .flat_map(|url| parse_url(url))
-                .map(move |url| async move {
-                    let pkgver_cur = srcinfo.base.pkgver.to_owned();
-                    let pkgrel_cur = srcinfo.base.pkgrel.to_owned();
-                    let pkgname = srcinfo.pkg.pkgname.to_owned();
-                    let ref_id_new = get_head_identifier(url.remote, url.branch).await?;
-                    Ok::<_, crate::Error>(DevelUpdate {
-                        pkgname,
-                        pkgver_cur,
-                        ref_id_new,
-                        pkgrel_cur,
-                    })
+    let devel_updates = futures::stream::iter(devel_packages.into_iter())
+        .then(|pkg| async move {
+            compile_error!("Remove this unwrap!")
+            let srcinfo = get_aur_srcinfo(&pkg.pkgname).await.unwrap();
+            let source = srcinfo.base.source;
+            source
+                .into_iter()
+                .flat_map(move |arch| arch.vec.into_iter())
+                .filter_map(|url| {
+                    let url = parse_url(&url)?;
+                    let PackageUrl { remote, branch, .. } = url;
+                    // This allocation isn't ideal, but it's here to work around lifetime issues
+                    // with nested streams that I've been unable to resolve. Spent a few hours on it
+                    // so far!
+                    Some((remote, branch.map(ToString::to_string)))
                 })
+                .map(move |(remote, branch)| {
+                    let pkgver_cur = pkg.pkgver.to_owned();
+                    let pkgrel_cur = pkg.pkgrel.to_owned();
+                    let pkgname = pkg.pkgname.to_owned();
+                    async move {
+                        let ref_id_new = get_head_identifier(remote, branch.as_deref()).await?;
+                        Ok::<_, crate::Error>(DevelUpdate {
+                            pkgname,
+                            pkgver_cur,
+                            ref_id_new,
+                            pkgrel_cur,
+                        })
+                    }
+                })
+                .collect::<FuturesOrdered<_>>()
         })
-        .collect::<FuturesUnordered<_>>()
+        .flatten()
         .try_collect::<Vec<_>>()
         .await?;
     Ok((
@@ -226,7 +226,7 @@ pub async fn check_aur_updates_online() -> Result<(Vec<Update>, Vec<Update>)> {
     Ok((
         cache
             .iter()
-            .filter(|update| aur_update_due(*update))
+            .filter(|update| aur_update_due(update))
             .cloned()
             .collect(),
         cache,
@@ -305,7 +305,7 @@ async fn get_ignored_packages() -> Result<Vec<String>> {
 /// An AUR package is a package returned by `pacman -Qm` excluding ignored
 /// packages.
 async fn get_aur_packages() -> Result<Vec<Package>> {
-    let (ignored_packages, output) = tokio::join!(
+    let (ignored_packages, output) = futures::join!(
         get_ignored_packages(),
         Command::new("pacman").arg("-Qm").output()
     );
@@ -338,7 +338,7 @@ async fn get_devel_packages() -> Result<Vec<Package>> {
 }
 
 /// Get and parse the .SRCINFO for an aur package.
-async fn get_aur_srcinfo(pkgname: String) -> Result<Srcinfo> {
+async fn get_aur_srcinfo(pkgname: &str) -> Result<Srcinfo> {
     // First we need to get the base repository from the AUR API. Since the pkgname
     // may not be the same as the repository name (and repository can contain
     // multiple packages).
@@ -346,7 +346,7 @@ async fn get_aur_srcinfo(pkgname: String) -> Result<Srcinfo> {
     let info = &aur
         .info(&[&pkgname])
         .await
-        .map_err(|_| Error::GetAurPackageFailed(Some(pkgname.clone())))?[0];
+        .map_err(|_| Error::GetAurPackageFailed(Some(pkgname.to_string())))?[0];
     let base = &info.package_base;
 
     let url = format!("https://aur.archlinux.org/cgit/aur.git/plain/.SRCINFO?h={base}");
@@ -354,7 +354,7 @@ async fn get_aur_srcinfo(pkgname: String) -> Result<Srcinfo> {
     // The pkg.pkgname field of the .SRCINO is not likely to be populated, but we'll
     // need it for later parsing, so we populate it ourself.
     let mut srcinfo = Srcinfo::from_str(&raw)?;
-    srcinfo.pkg.pkgname = pkgname;
+    srcinfo.pkg.pkgname = pkgname.to_string();
 
     Ok(srcinfo)
 }
@@ -427,7 +427,7 @@ fn parse_update(value: &str) -> Result<Update> {
 
 /// Parse source field from .SRCINFO
 // NOTE: This is from paru (GPL3)
-fn parse_url(source: &str) -> Option<PackageUrl> {
+fn parse_url<'a>(source: &'a str) -> Option<PackageUrl<'a>> {
     let url = source.splitn(2, "::").last().unwrap();
 
     if !url.starts_with("git") || !url.contains("://") {
@@ -497,17 +497,17 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_srcinfo() {
-        get_aur_srcinfo("hyprlang-git".to_string()).await.unwrap();
+        get_aur_srcinfo("hyprlang-git").await.unwrap();
     }
     #[tokio::test]
     async fn test_get_url() {
-        let srcinfo = get_aur_srcinfo("hyprlang-git".to_string()).await.unwrap();
+        let srcinfo = get_aur_srcinfo("hyprlang-git").await.unwrap();
         let url = srcinfo.base.source.first().unwrap().vec.first().unwrap();
         parse_url(url).unwrap();
     }
     #[tokio::test]
     async fn test_get_head() {
-        let srcinfo = get_aur_srcinfo("hyprutils-git".to_string()).await.unwrap();
+        let srcinfo = get_aur_srcinfo("hyprutils-git").await.unwrap();
         let url = srcinfo.base.source.first().unwrap().vec.first().unwrap();
         let url_parsed = parse_url(url).unwrap();
         get_head_identifier(url_parsed.remote, url_parsed.branch)

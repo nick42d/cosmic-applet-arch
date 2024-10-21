@@ -14,6 +14,8 @@ mod view;
 
 /// How often to compare current packages with the latest version in memory.
 const INTERVAL: Duration = Duration::from_secs(6);
+/// How long the api call can run without triggering a timeout.
+const TIMEOUT: Duration = Duration::from_secs(60 * 2);
 /// Every `CYCLES` number of `INTERVAL`s (starting at the first interval), the
 /// system will update the latest version in memory from the internet.
 const CYCLES: usize = 600;
