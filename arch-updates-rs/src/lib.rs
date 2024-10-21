@@ -1,3 +1,25 @@
+//! # arch_updates_rs
+//! Library to query arch linux packaging tools to see if updates are available.
+//! Designed for cosmic-applet-arch, but could be used in similar apps as well.
+//! # Usage
+//! ```no_run
+//!
+//! #[tokio::main]
+//! pub async fn main() -> Result<(), arch_updates_ys::Error> {
+//!     let (pacman, aur, devel) = tokio::join!(
+//!         let pacman = check_updates(CheckType::Online),
+//!         let aur = check_aur_updates(CheckType::Online),
+//!         let devel = check_devel_updates(CheckType::Online),
+//!     ).await;
+//!
+//!     let cookie_path = std::path::Path::new("./cookie.txt");
+//!     let yt = ytmapi_rs::YtMusic::from_cookie_file(cookie_path).await?;
+//!     yt.get_search_suggestions("Beatles").await?;
+//!     let result = yt.get_search_suggestions("Beatles").await?;
+//!     println!("{:?}", result);
+//!     Ok(())
+//! }
+//! ```
 use core::str;
 use futures::{stream::FuturesOrdered, StreamExt, TryStreamExt};
 use raur::Raur;
@@ -42,6 +64,7 @@ pub enum Error {
     #[error("Failed to parse pkgver and pkgrel from string `{0}`")]
     ParseErrorPkgverPkgrel(String),
 }
+
 pub enum CheckType {
     Online,
     Offline,
@@ -88,6 +111,16 @@ struct PackageUrl<'a> {
 
 /// Use the `checkupdates` function to check if any pacman-managed packages have
 /// updates due.
+/// # Usage
+/// ```no_run
+/// # async {
+/// let online = check_updates(CheckType::Online).await.unwrap();
+/// let offline = check_updates(CheckType::Offline).await.unwrap();
+/// assert_eq!(online, offline);
+/// // Run `sudo pacman -Syu` in the terminal
+/// let offline = check_updates(CheckType::Offline).await.unwrap();
+/// assert!(offline.is_empty());
+/// # };
 pub async fn check_updates(check_type: CheckType) -> Result<Vec<Update>> {
     let args = match check_type {
         CheckType::Online => ["--nocolor"].as_slice(),
@@ -116,6 +149,14 @@ pub async fn check_updates(check_type: CheckType) -> Result<Vec<Update>> {
 ///  - This is also reliant on VCS packages being good
 ///    citizens and following the VCS Packaging Guidelines.
 ///    https://wiki.archlinux.org/title/VCS_package_guidelines
+/// # Usage
+/// ```no_run
+/// # async {
+/// let (updates, cache) = check_devel_updates_online().await.unwrap();
+/// // Run `paru -Syu` in the terminal
+/// let updates = check_devel_updates_online().await.unwrap();
+/// assert!(updates.is_empty());
+/// # };
 pub async fn check_devel_updates_online() -> Result<(Vec<DevelUpdate>, Vec<DevelUpdate>)> {
     let devel_packages = get_devel_packages().await?;
     let devel_updates = futures::stream::iter(devel_packages.into_iter())
@@ -168,6 +209,16 @@ pub async fn check_devel_updates_online() -> Result<(Vec<DevelUpdate>, Vec<Devel
 ///
 /// Offline version - this function needs a reference to the latest version of
 /// all devel packages (returned from `check_devel_updates_online()`.
+/// # Usage
+/// ```no_run
+/// # async {
+/// let (online, cache) = check_devel_updates_online().await.unwrap();
+/// let offline = check_devel_updates_online(&cache).await.unwrap();
+/// assert_eq!(online, offline);
+/// // Run `paru -Syu` in the terminal
+/// let offline = check_devel_updates_online(&cache).await.unwrap();
+/// assert!(offline.is_empty());
+/// # };
 pub async fn check_devel_updates_offline(cache: &[DevelUpdate]) -> Result<Vec<DevelUpdate>> {
     let devel_packages = get_devel_packages().await?;
     let devel_updates = devel_packages
@@ -198,6 +249,14 @@ pub async fn check_devel_updates_offline(cache: &[DevelUpdate]) -> Result<Vec<De
 /// # Notes
 ///  - Locally installed packages that aren't in the AUR are currently not
 ///    implemented and may return an error.
+/// # Usage
+/// ```no_run
+/// # async {
+/// let (updates, cache) = check_aur_updates_online().await.unwrap();
+/// // Run `paru -Syu` in the terminal
+/// let updates = check_aur_updates_online().await.unwrap();
+/// assert!(updates.is_empty());
+/// # };
 pub async fn check_aur_updates_online() -> Result<(Vec<Update>, Vec<Update>)> {
     let old = get_aur_packages().await?;
     let aur = raur::Handle::new();
@@ -237,6 +296,16 @@ pub async fn check_aur_updates_online() -> Result<(Vec<Update>, Vec<Update>)> {
 ///
 /// Offline version - this function needs a reference to the latest version of
 /// all aur packages (returned from `check_aur_updates_online()`.
+/// # Usage
+/// ```no_run
+/// # async {
+/// let (online, cache) = check_aur_updates_online().await.unwrap();
+/// let offline = check_aur_updates_online(&cache).await.unwrap();
+/// assert_eq!(online, offline);
+/// // Run `paru -Syu` in the terminal
+/// let offline = check_aur_updates_offline(&cache).await.unwrap();
+/// assert!(offline.is_empty());
+/// # };
 pub async fn check_aur_updates_offline(cache: &[Update]) -> Result<Vec<Update>> {
     let old = get_aur_packages().await?;
     let updates = old
