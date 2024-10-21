@@ -46,9 +46,25 @@ pub enum Error {
     ParseErrorPkgverPkgrel(String),
 }
 
-pub enum CheckType<Cache> {
+trait CheckTypeTrait<T> {
+    type CacheIn;
+    type CacheOut;
+}
+
+pub struct OfflineCheck;
+pub struct OnlineCheck;
+impl<T> CheckTypeTrait<T> for OfflineCheck {
+    type CacheIn = &[T];
+    type CacheOut = ();
+}
+impl<T> CheckTypeTrait<T> for OnlineCheck {
+    type CacheIn = ()
+    type CacheOut = T;
+}
+
+pub enum CheckType {
     Online,
-    Offline(Cache),
+    Offline,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -86,10 +102,10 @@ struct PackageUrl<'a> {
 
 /// Use the `checkupdates` function to check if any pacman-managed packages have
 /// updates due.
-pub async fn check_updates(check_type: CheckType<()>) -> Result<Vec<Update>> {
+pub async fn check_updates(check_type: CheckType) -> Result<Vec<Update>> {
     let args = match check_type {
         CheckType::Online => ["--nocolor"].as_slice(),
-        CheckType::Offline(()) => ["--nosync", "--nocolor"].as_slice(),
+        CheckType::Offline => ["--nosync", "--nocolor"].as_slice(),
     };
     let output = Command::new("checkupdates").args(args).output().await?;
     str::from_utf8(output.stdout.as_slice())?
@@ -112,70 +128,117 @@ pub async fn check_updates(check_type: CheckType<()>) -> Result<Vec<Update>> {
 ///  - Latest version of all devel packages - for offline use. Note, if
 ///    CheckType was Offline, this simple returns the same cache back as nothing
 ///    has changed.
-pub async fn check_devel_updates(
-    check_type: CheckType<Vec<DevelUpdate>>,
-) -> Result<(Vec<DevelUpdate>, Vec<DevelUpdate>)> {
+// TODO: Update docs
+pub async fn check_devel_updates_online() -> Result<(Vec<DevelUpdate>, Vec<DevelUpdate>)> {
     let devel_packages = get_devel_packages().await?;
-    let devel_updates = match check_type {
-        CheckType::Online => {
-            let devel_package_srcinfos = devel_packages
-                .into_iter()
-                .map(|pkg| get_aur_srcinfo(pkg.pkgname))
-                .collect::<FuturesOrdered<_>>()
-                // May be able to avoid this collection using stream or iterator adaptors.
-                .try_collect::<Vec<_>>()
-                .await?;
-            devel_package_srcinfos
+    let devel_package_srcinfos = devel_packages
+        .into_iter()
+        .map(|pkg| get_aur_srcinfo(pkg.pkgname))
+        .collect::<FuturesOrdered<_>>()
+        // May be able to avoid this collection using stream or iterator adaptors.
+        .try_collect::<Vec<_>>()
+        .await?;
+    let devel_updates = devel_package_srcinfos
+        .iter()
+        .flat_map(|srcinfo| {
+            srcinfo
+                .base
+                .source
                 .iter()
-                .flat_map(|srcinfo| {
-                    srcinfo
-                        .base
-                        .source
-                        .iter()
-                        .flat_map(|arch| arch.vec.iter())
-                        .flat_map(|url| parse_url(url))
-                        .map(move |url| async move {
-                            let pkgver_cur = srcinfo.base.pkgver.to_owned();
-                            let pkgrel_cur = srcinfo.base.pkgrel.to_owned();
-                            let pkgname = srcinfo.pkg.pkgname.to_owned();
-                            let ref_id_new = get_head_identifier(url.remote, url.branch).await?;
-                            Ok::<_, crate::Error>(DevelUpdate {
-                                pkgname,
-                                pkgver_cur,
-                                ref_id_new,
-                                pkgrel_cur,
-                            })
-                        })
-                })
-                .collect::<FuturesUnordered<_>>()
-                .try_collect::<Vec<_>>()
-                .await
-        }
-        CheckType::Offline(cache) => devel_packages
-            .iter()
-            .flat_map(|package| {
-                cache
-                    .iter()
-                    .filter(|cache_package| cache_package.pkgname == package.pkgname)
-                    .map(move |cache_package| {
-                        Ok(DevelUpdate {
-                            pkgname: package.pkgname.to_owned(),
-                            pkgver_cur: package.pkgver.to_owned(),
-                            pkgrel_cur: package.pkgrel.to_owned(),
-                            ref_id_new: cache_package.ref_id_new.to_owned(),
-                        })
+                .flat_map(|arch| arch.vec.iter())
+                .flat_map(|url| parse_url(url))
+                .map(move |url| async move {
+                    let pkgver_cur = srcinfo.base.pkgver.to_owned();
+                    let pkgrel_cur = srcinfo.base.pkgrel.to_owned();
+                    let pkgname = srcinfo.pkg.pkgname.to_owned();
+                    let ref_id_new = get_head_identifier(url.remote, url.branch).await?;
+                    Ok::<_, crate::Error>(DevelUpdate {
+                        pkgname,
+                        pkgver_cur,
+                        ref_id_new,
+                        pkgrel_cur,
                     })
-            })
-            .collect(),
-    }?;
+                })
+        })
+        .collect::<FuturesUnordered<_>>()
+        .try_collect::<Vec<_>>()
+        .await?;
     Ok((
         devel_updates
             .iter()
-            .filter(|update| !update.pkgver_cur.contains(&update.ref_id_new))
-            .map(ToOwned::to_owned)
+            .filter(|update| devel_update_due(update))
+            .cloned()
             .collect::<Vec<_>>(),
         devel_updates,
     ))
+}
+
+/// Check if any packages ending in `DEVEL_SUFFIXES` have updates to their
+/// source repositories.
+/// Note that for this to be accurate, it's reliant on each devel package having
+/// only one source URL. If this is not the case, the function will produce a
+/// DevelUpdate for each source url, and may assume one or more are out of date.
+///
+/// NOTE: This is also reliant on VCS packages being good
+/// citizens and following the VCS Packaging Guidelines.
+/// https://wiki.archlinux.org/title/VCS_package_guidelines
+/// Returns a tuple of:
+///  - Packages that are not up to date.
+///  - Latest version of all devel packages - for offline use. Note, if
+///    CheckType was Offline, this simple returns the same cache back as nothing
+///    has changed.
+// TODO: Update docs
+pub async fn check_devel_updates_offline(cache: &[DevelUpdate]) -> Result<Vec<DevelUpdate>> {
+    let devel_packages = get_devel_packages().await?;
+    let devel_updates = devel_packages
+        .iter()
+        .flat_map(|package| {
+            cache
+                .iter()
+                .filter(|cache_package| cache_package.pkgname == package.pkgname)
+                .map(move |cache_package| DevelUpdate {
+                    pkgname: package.pkgname.to_owned(),
+                    pkgver_cur: package.pkgver.to_owned(),
+                    pkgrel_cur: package.pkgrel.to_owned(),
+                    ref_id_new: cache_package.ref_id_new.to_owned(),
+                })
+        })
+        .filter(devel_update_due)
+        .collect();
+    Ok(devel_updates)
+}
+
+/// Returns true if a DevelUpdate is due.
+fn devel_update_due(update: &DevelUpdate) -> bool {
+    !update.pkgver_cur.contains(&update.ref_id_new)
+}
+
+pub async fn check_aur_updates_offline(cache: &[Update]) -> Result<Vec<Update>> {
+    let old = get_aur_packages().await?;
+    let updates = old
+        .iter()
+        .map(|old_package| {
+            let matching_cached = cache
+                .iter()
+                .find(|cache_package| cache_package.pkgname == old_package.pkgname);
+            let (pkgver_new, pkgrel_new) = match matching_cached {
+                Some(cache_package) => (
+                    cache_package.pkgver_new.to_owned(),
+                    cache_package.pkgrel_new.to_owned(),
+                ),
+                None => (old_package.pkgver.to_owned(), old_package.pkgrel.to_owned()),
+            };
+            Update {
+                pkgname: old_package.pkgname.to_owned(),
+                pkgver_cur: old_package.pkgver.to_owned(),
+                pkgrel_cur: old_package.pkgrel.to_owned(),
+                pkgver_new,
+                pkgrel_new,
+            }
+        })
+        .filter(aur_update_due)
+        .collect();
+    Ok(updates)
 }
 
 /// Check if any packages ending in `DEVEL_SUFFIXES` are up to date.
@@ -185,79 +248,55 @@ pub async fn check_devel_updates(
 ///    CheckType was Offline, this simple returns the same cache back as nothing
 ///    has changed.
 // TODO: Consider if devel packages should be filtered entirely.
-pub async fn check_aur_updates(
-    check_type: CheckType<Vec<Update>>,
-) -> Result<(Vec<Update>, Vec<Update>)> {
+// TODO update docs
+pub async fn check_aur_updates_online() -> Result<(Vec<Update>, Vec<Update>)> {
     let old = get_aur_packages().await?;
-    let updated_cache: Vec<Update> = match check_type {
-        CheckType::Online => {
-            let aur = raur::Handle::new();
-            aur.info(
-                old.iter()
-                    .map(|pkg| pkg.pkgname.to_owned())
-                    .collect::<Vec<_>>()
-                    .as_slice(),
-            )
-            .await
-            .map_err(|_| Error::GetAurPackageFailed(None))?
-            .into_iter()
-            .filter_map(|new| {
-                let matching_old = &old.iter().find(|old| old.pkgname == new.name)?.clone();
-                let (pkgver_new, pkgrel_new) = parse_ver_and_rel(new.version).unwrap();
-                Some(Update {
-                    pkgname: matching_old.pkgname.to_owned(),
-                    pkgver_cur: matching_old.pkgver.to_owned(),
-                    pkgrel_cur: matching_old.pkgrel.to_owned(),
-                    pkgver_new,
-                    pkgrel_new,
-                })
+    let aur = raur::Handle::new();
+    let cache: Vec<Update> = aur
+        .info(
+            old.iter()
+                .map(|pkg| pkg.pkgname.to_owned())
+                .collect::<Vec<_>>()
+                .as_slice(),
+        )
+        .await
+        .map_err(|_| Error::GetAurPackageFailed(None))?
+        .into_iter()
+        .filter_map(|new| {
+            let matching_old = &old.iter().find(|old| old.pkgname == new.name)?.clone();
+            let (pkgver_new, pkgrel_new) = parse_ver_and_rel(new.version).unwrap();
+            Some(Update {
+                pkgname: matching_old.pkgname.to_owned(),
+                pkgver_cur: matching_old.pkgver.to_owned(),
+                pkgrel_cur: matching_old.pkgrel.to_owned(),
+                pkgver_new,
+                pkgrel_new,
             })
-            .collect()
-        }
-        CheckType::Offline(cache) => old
-            .iter()
-            .map(|old_package| {
-                let matching_cached = cache
-                    .iter()
-                    .find(|cache_package| cache_package.pkgname == old_package.pkgname);
-                let (pkgver_new, pkgrel_new) = match matching_cached {
-                    Some(cache_package) => (
-                        cache_package.pkgver_new.to_owned(),
-                        cache_package.pkgrel_new.to_owned(),
-                    ),
-                    None => (old_package.pkgver.to_owned(), old_package.pkgrel.to_owned()),
-                };
-                Update {
-                    pkgname: old_package.pkgname.to_owned(),
-                    pkgver_cur: old_package.pkgver.to_owned(),
-                    pkgrel_cur: old_package.pkgrel.to_owned(),
-                    pkgver_new,
-                    pkgrel_new,
-                }
-            })
-            .collect(),
-    };
+        })
+        .collect();
     Ok((
-        updated_cache
+        cache
             .iter()
-            .filter(|package| {
-                // If it's not possible to determine ordering for a package, it will be filtered
-                // out. Note that this can include some VCS packages using
-                // commit hashes as pkgver. That is likely acceptable behaviour
-                // as VCS packages will be analyzed in check_devel_updates().
-                let Some(pkgver_new) = Version::from(&package.pkgver_new) else {
-                    return false;
-                };
-                let Some(pkgver_old) = Version::from(&package.pkgver_cur) else {
-                    return false;
-                };
-                pkgver_new > pkgver_old
-                    || (pkgver_new == pkgver_old && package.pkgrel_new > package.pkgrel_cur)
-            })
+            .filter(|update| aur_update_due(*update))
             .cloned()
             .collect(),
-        updated_cache,
+        cache,
     ))
+}
+
+/// Return true if an aur package is due for an update.
+fn aur_update_due(package: &Update) -> bool {
+    // If it's not possible to determine ordering for a package, it will be filtered
+    // out. Note that this can include some VCS packages using
+    // commit hashes as pkgver. That is likely acceptable behaviour
+    // as VCS packages will be analyzed in check_devel_updates().
+    let Some(pkgver_new) = Version::from(&package.pkgver_new) else {
+        return false;
+    };
+    let Some(pkgver_old) = Version::from(&package.pkgver_cur) else {
+        return false;
+    };
+    pkgver_new > pkgver_old || (pkgver_new == pkgver_old && package.pkgrel_new > package.pkgrel_cur)
 }
 
 /// pacman conf has a list of packages that should be ignored by pacman. This
