@@ -45,23 +45,6 @@ pub enum Error {
     #[error("Failed to parse pkgver and pkgrel from string `{0}`")]
     ParseErrorPkgverPkgrel(String),
 }
-
-trait CheckTypeTrait<T> {
-    type CacheIn;
-    type CacheOut;
-}
-
-pub struct OfflineCheck;
-pub struct OnlineCheck;
-impl<T> CheckTypeTrait<T> for OfflineCheck {
-    type CacheIn = &[T];
-    type CacheOut = ();
-}
-impl<T> CheckTypeTrait<T> for OnlineCheck {
-    type CacheIn = ()
-    type CacheOut = T;
-}
-
 pub enum CheckType {
     Online,
     Offline,
@@ -116,19 +99,19 @@ pub async fn check_updates(check_type: CheckType) -> Result<Vec<Update>> {
 
 /// Check if any packages ending in `DEVEL_SUFFIXES` have updates to their
 /// source repositories.
-/// Note that for this to be accurate, it's reliant on each devel package having
-/// only one source URL. If this is not the case, the function will produce a
-/// DevelUpdate for each source url, and may assume one or more are out of date.
 ///
-/// NOTE: This is also reliant on VCS packages being good
-/// citizens and following the VCS Packaging Guidelines.
-/// https://wiki.archlinux.org/title/VCS_package_guidelines
+/// Online version - this function checks the network.
 /// Returns a tuple of:
 ///  - Packages that are not up to date.
-///  - Latest version of all devel packages - for offline use. Note, if
-///    CheckType was Offline, this simple returns the same cache back as nothing
-///    has changed.
-// TODO: Update docs
+///  - Latest version of all devel packages - for offline use.
+///
+/// # Notes
+///  - For this to be accurate, it's reliant on each devel package having
+/// only one source URL. If this is not the case, the function will produce a
+/// DevelUpdate for each source url, and may assume one or more are out of date.
+///  - This is also reliant on VCS packages being good
+/// citizens and following the VCS Packaging Guidelines.
+/// https://wiki.archlinux.org/title/VCS_package_guidelines
 pub async fn check_devel_updates_online() -> Result<(Vec<DevelUpdate>, Vec<DevelUpdate>)> {
     let devel_packages = get_devel_packages().await?;
     let devel_package_srcinfos = devel_packages
@@ -175,19 +158,9 @@ pub async fn check_devel_updates_online() -> Result<(Vec<DevelUpdate>, Vec<Devel
 
 /// Check if any packages ending in `DEVEL_SUFFIXES` have updates to their
 /// source repositories.
-/// Note that for this to be accurate, it's reliant on each devel package having
-/// only one source URL. If this is not the case, the function will produce a
-/// DevelUpdate for each source url, and may assume one or more are out of date.
 ///
-/// NOTE: This is also reliant on VCS packages being good
-/// citizens and following the VCS Packaging Guidelines.
-/// https://wiki.archlinux.org/title/VCS_package_guidelines
-/// Returns a tuple of:
-///  - Packages that are not up to date.
-///  - Latest version of all devel packages - for offline use. Note, if
-///    CheckType was Offline, this simple returns the same cache back as nothing
-///    has changed.
-// TODO: Update docs
+/// Offline version - this function needs a reference to the latest version of
+/// all devel packages (returned from `check_devel_updates_online()`.
 pub async fn check_devel_updates_offline(cache: &[DevelUpdate]) -> Result<Vec<DevelUpdate>> {
     let devel_packages = get_devel_packages().await?;
     let devel_updates = devel_packages
@@ -208,47 +181,16 @@ pub async fn check_devel_updates_offline(cache: &[DevelUpdate]) -> Result<Vec<De
     Ok(devel_updates)
 }
 
-/// Returns true if a DevelUpdate is due.
-fn devel_update_due(update: &DevelUpdate) -> bool {
-    !update.pkgver_cur.contains(&update.ref_id_new)
-}
-
-pub async fn check_aur_updates_offline(cache: &[Update]) -> Result<Vec<Update>> {
-    let old = get_aur_packages().await?;
-    let updates = old
-        .iter()
-        .map(|old_package| {
-            let matching_cached = cache
-                .iter()
-                .find(|cache_package| cache_package.pkgname == old_package.pkgname);
-            let (pkgver_new, pkgrel_new) = match matching_cached {
-                Some(cache_package) => (
-                    cache_package.pkgver_new.to_owned(),
-                    cache_package.pkgrel_new.to_owned(),
-                ),
-                None => (old_package.pkgver.to_owned(), old_package.pkgrel.to_owned()),
-            };
-            Update {
-                pkgname: old_package.pkgname.to_owned(),
-                pkgver_cur: old_package.pkgver.to_owned(),
-                pkgrel_cur: old_package.pkgrel.to_owned(),
-                pkgver_new,
-                pkgrel_new,
-            }
-        })
-        .filter(aur_update_due)
-        .collect();
-    Ok(updates)
-}
-
-/// Check if any packages ending in `DEVEL_SUFFIXES` are up to date.
+/// Check if any AUR packages have updates to their pkgver-pkgrel.
+///
+/// Online version - this function checks the network.
 /// Returns a tuple of:
 ///  - Packages that are not up to date.
-///  - Latest version of all devel packages - for offline use. Note, if
-///    CheckType was Offline, this simple returns the same cache back as nothing
-///    has changed.
-// TODO: Consider if devel packages should be filtered entirely.
-// TODO update docs
+///  - Latest version of all aur packages - for offline use.
+///
+/// # Notes
+///  - Locally installed packages that aren't in the AUR are currently not
+///    implemented and may return an error.
 pub async fn check_aur_updates_online() -> Result<(Vec<Update>, Vec<Update>)> {
     let old = get_aur_packages().await?;
     let aur = raur::Handle::new();
@@ -282,6 +224,43 @@ pub async fn check_aur_updates_online() -> Result<(Vec<Update>, Vec<Update>)> {
             .collect(),
         cache,
     ))
+}
+
+/// Check if any AUR packages have updates to their pkgver-pkgrel.
+///
+/// Offline version - this function needs a reference to the latest version of
+/// all aur packages (returned from `check_aur_updates_online()`.
+pub async fn check_aur_updates_offline(cache: &[Update]) -> Result<Vec<Update>> {
+    let old = get_aur_packages().await?;
+    let updates = old
+        .iter()
+        .map(|old_package| {
+            let matching_cached = cache
+                .iter()
+                .find(|cache_package| cache_package.pkgname == old_package.pkgname);
+            let (pkgver_new, pkgrel_new) = match matching_cached {
+                Some(cache_package) => (
+                    cache_package.pkgver_new.to_owned(),
+                    cache_package.pkgrel_new.to_owned(),
+                ),
+                None => (old_package.pkgver.to_owned(), old_package.pkgrel.to_owned()),
+            };
+            Update {
+                pkgname: old_package.pkgname.to_owned(),
+                pkgver_cur: old_package.pkgver.to_owned(),
+                pkgrel_cur: old_package.pkgrel.to_owned(),
+                pkgver_new,
+                pkgrel_new,
+            }
+        })
+        .filter(aur_update_due)
+        .collect();
+    Ok(updates)
+}
+
+/// Returns true if a DevelUpdate is due.
+fn devel_update_due(update: &DevelUpdate) -> bool {
+    !update.pkgver_cur.contains(&update.ref_id_new)
 }
 
 /// Return true if an aur package is due for an update.
@@ -482,30 +461,29 @@ fn parse_url(source: &str) -> Option<PackageUrl> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        check_aur_updates, check_devel_updates, check_updates, get_aur_srcinfo,
-        get_head_identifier, parse_pacman_qm, parse_update, parse_url, parse_ver_and_rel,
-        CheckType, Error, Package, PackageUrl, Update,
+        check_aur_updates_offline, check_aur_updates_online, check_devel_updates_offline,
+        check_devel_updates_online, check_updates, get_aur_srcinfo, get_head_identifier,
+        parse_pacman_qm, parse_update, parse_url, parse_ver_and_rel, CheckType, Error, Package,
+        PackageUrl, Update,
     };
 
     #[tokio::test]
     async fn test_check_updates() {
         let online = check_updates(CheckType::Online).await.unwrap();
-        let offline = check_updates(CheckType::Offline(())).await.unwrap();
+        let offline = check_updates(CheckType::Offline).await.unwrap();
         assert_eq!(online, offline);
     }
     #[tokio::test]
     async fn test_check_aur_updates() {
-        let (online, cache) = check_aur_updates(CheckType::Online).await.unwrap();
-        let (offline, _) = check_aur_updates(CheckType::Offline(cache)).await.unwrap();
+        let (online, cache) = check_aur_updates_online().await.unwrap();
+        let offline = check_aur_updates_offline(&cache).await.unwrap();
         assert_eq!(online, offline);
         eprintln!("aur {:#?}", online);
     }
     #[tokio::test]
     async fn test_check_devel_updates() {
-        let (online, cache) = check_devel_updates(CheckType::Online).await.unwrap();
-        let (offline, _) = check_devel_updates(CheckType::Offline(cache))
-            .await
-            .unwrap();
+        let (online, cache) = check_devel_updates_online().await.unwrap();
+        let offline = check_devel_updates_offline(&cache).await.unwrap();
         assert_eq!(online, offline);
         eprintln!("devel {:#?}", online);
     }
