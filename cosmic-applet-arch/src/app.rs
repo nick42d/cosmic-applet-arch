@@ -31,7 +31,7 @@ pub struct CosmicAppletArch {
     devel_list_state: Collapsed,
     refresh_pressed_notifier: Arc<tokio::sync::Notify>,
     last_checked: Option<DateTime<Local>>,
-    error: Option<Arc<arch_updates_rs::Error>>,
+    error: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -44,7 +44,7 @@ pub enum Message {
         updates: Updates,
         checked_online_time: Option<DateTime<Local>>,
     },
-    CheckUpdatesErrorsMsg(Arc<arch_updates_rs::Error>),
+    CheckUpdatesErrorsMsg(String),
 }
 
 #[derive(Clone, Debug)]
@@ -161,7 +161,7 @@ impl CosmicAppletArch {
         self.refresh_pressed_notifier.notify_one();
         Command::none()
     }
-    fn handle_update_error(&mut self, error: Arc<arch_updates_rs::Error>) -> Command<Message> {
+    fn handle_update_error(&mut self, error: String) -> Command<Message> {
         self.error = Some(error);
         Command::none()
     }

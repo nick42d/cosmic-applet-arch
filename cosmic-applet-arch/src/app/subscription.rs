@@ -1,24 +1,45 @@
-use std::sync::Arc;
-
 use super::{CosmicAppletArch, Message, CYCLES, INTERVAL, SUBSCRIPTION_BUF_SIZE};
 use arch_updates_rs::{CheckType, DevelUpdate, Update};
-use chrono::Local;
+use chrono::{DateTime, Local};
 use cosmic::iced::futures::{channel::mpsc, SinkExt};
+use futures::TryFutureExt;
+use std::future::Future;
 use tokio::join;
 
 // Long running stream of messages to the app.
 pub fn subscription(app: &CosmicAppletArch) -> cosmic::iced::Subscription<Message> {
     let notifier = app.refresh_pressed_notifier.clone();
+    async fn send_error(tx: &mut mpsc::Sender<Message>, e: impl std::fmt::Display) {
+        tx.send(Message::CheckUpdatesErrorsMsg(format!("{e}")))
+            .await
+            .unwrap_or_else(|e| {
+                eprintln!(
+                    "Error {e} sending Arch update status - maybe the applet has been dropped."
+                )
+            });
+    }
+    async fn send_update(
+        tx: &mut mpsc::Sender<Message>,
+        updates: Updates,
+        checked_online_time: Option<DateTime<Local>>,
+    ) {
+        tx.send(Message::CheckUpdatesMsg {
+            updates,
+            checked_online_time,
+        })
+        .await
+        .unwrap_or_else(|e| {
+            eprintln!("Error {e} sending Arch update status - maybe the applet has been dropped.")
+        });
+    }
+    // TODO: Determine if INTERVAL is sufficient to prevent too many timeouts.
     let worker = |mut tx: mpsc::Sender<Message>| async move {
         let mut counter = 0;
-        let mut cache = CacheState::default();
+        // If we have no cache, that means we haven't run a succesful online check.
+        // Offline checks will be skipped until we can run one.
+        let mut cache = None;
         let mut interval = tokio::time::interval(INTERVAL);
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-        // If we are in error state, that means the online check failed.
-        // In that case we won't have a valid or up to date cache, so there is
-        // no point checking offline either.
-        // This will reset once we can run a succesful online check.
-        let mut error_state = false;
         loop {
             let notified = notifier.notified();
             tokio::select! {
@@ -31,68 +52,50 @@ pub fn subscription(app: &CosmicAppletArch) -> cosmic::iced::Subscription<Messag
                     if counter > CYCLES {
                         counter = 0
                     }
-                    if error_state && matches!(check_type, CheckType::Offline) {
-                        continue;
-                    }
-                    let updates = match check_type {
-                        CheckType::Online => {
-                            match get_updates_online().await {
+                    let updates = match (&check_type, &cache) {
+                        (CheckType::Online, _) => {
+                            match flat_erased_timeout(INTERVAL, get_updates_online()).await {
                                 Err(e) => {
-                                    tx.send(Message::CheckUpdatesErrorsMsg(Arc::new(e)))
-                                        .await
-                                        .unwrap_or_else(|e| eprintln!("Error {e} sending Arch update status - maybe the applet has been dropped."));
+                                    cache = None;
+                                    send_error(&mut tx, e).await;
                                     continue;
                                 },
                                 Ok((updates, cache_tmp)) => {
-                                    error_state = false;
-                                    cache = cache_tmp;
+                                    cache = Some(cache_tmp);
                                     updates
                                 }
                             }
                         }
-                        CheckType::Offline => {
-                            match get_updates_offline(&cache).await {
+                        (CheckType::Offline, Some(cache)) => {
+                            match flat_erased_timeout(INTERVAL, get_updates_offline(cache)).await {
                                 Err(e) => {
-                                    tx.send(Message::CheckUpdatesErrorsMsg(Arc::new(e)))
-                                        .await
-                                        .unwrap_or_else(|e| eprintln!("Error {e} sending Arch update status - maybe the applet has been dropped."));
+                                    send_error(&mut tx, e).await;
                                     continue;
                                 },
                                 Ok(updates) => updates
                             }
                         }
+                        (CheckType::Offline, None) => continue,
                     };
                     let checked_online_time = match check_type {
                         CheckType::Online => Some(Local::now()),
                         CheckType::Offline => None,
                     };
-                    tx.send(Message::CheckUpdatesMsg{
-                            updates,
-                            checked_online_time,
-                        })
-                        .await
-                        .unwrap_or_else(|e| eprintln!("Error {e} sending Arch update status - maybe the applet has been dropped."));
+                    send_update(&mut tx, updates, checked_online_time).await;
                 }
                 _ = notified => {
-                    let updates = get_updates_online().await;
+                    counter = 1;
+                    let updates = flat_erased_timeout(INTERVAL, get_updates_online()).await;
                     match updates {
                         Ok((updates, cache_tmp)) => {
-                            error_state = false;
-                            cache = cache_tmp;
-                            tx.send(Message::CheckUpdatesMsg{
-                                updates,
-                                checked_online_time: Some(Local::now()),
-                            })
-                            .await
-                            .unwrap_or_else(|e| eprintln!("Error {e} sending Arch update status - maybe the applet has been dropped."))
+                            cache = Some(cache_tmp);
+                            send_update(&mut tx, updates, Some(Local::now())).await;
                         },
                         Err(e) => {
-                            tx.send(Message::CheckUpdatesErrorsMsg(Arc::new(e)))
-                            .await
-                            .unwrap_or_else(|e| eprintln!("Error {e} sending Arch update status - maybe the applet has been dropped."))
-                        },
+                            cache = None;
+                            send_error(&mut tx, e).await;
+                        }
                     }
-                    counter = 1;
                 }
             }
         }
@@ -112,6 +115,22 @@ pub struct Updates {
     pub pacman: Vec<Update>,
     pub aur: Vec<Update>,
     pub devel: Vec<DevelUpdate>,
+}
+
+/// Helper function - adds a timeout to a future that returns a result.
+/// Type erases the error by converting to string, avoiding nested results.
+async fn flat_erased_timeout<T, E, Fut>(duration: std::time::Duration, f: Fut) -> Result<T, String>
+where
+    Fut: Future<Output = Result<T, E>>,
+    E: std::fmt::Display,
+{
+    let res = tokio::time::timeout(duration, f.map_err(|e| format!("{e}")))
+        .map_err(|_| "API call timed out".to_string())
+        .await;
+    match res {
+        Ok(Err(e)) | Err(e) => Err(e),
+        Ok(Ok(t)) => Ok(t),
+    }
 }
 
 async fn get_updates_offline(cache: &CacheState) -> arch_updates_rs::Result<Updates> {

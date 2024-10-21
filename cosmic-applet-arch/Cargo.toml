@@ -7,6 +7,7 @@ rust-version = "1.80"
 
 [dependencies]
 chrono = "0.4.38"
+futures = "0.3.31"
 i18n-embed-fl = "0.9.1"
 itertools = "0.13.0"
 open = "5.1.3"
