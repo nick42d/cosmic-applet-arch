@@ -22,6 +22,7 @@ depends=(
   systemd-libs
 )
 makedepends=(
+  pkgconf
   cargo
   git
   just
