@@ -24,9 +24,9 @@ jobs:
       uses: actions/checkout@v4
     
     - name: Build
-      run: cargo build --verbose --locked
+      run: cargo build --verbose --frozen
 
     - name: Run tests
       run: | 
-        cargo test --verbose --locked --bins --lib
-        cargo test --verbose --locked --doc
+        cargo test --verbose --frozen --bins --lib
+        cargo test --verbose --frozen --doc
