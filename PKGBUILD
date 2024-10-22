@@ -14,12 +14,12 @@ depends=(
   openssl
   gcc-libs
   glibc
+  libxkbcommon
 # May not need all of these
   dbus
   libinput
   libpulse
   systemd-libs
-  libxkbcommon
 )
 makedepends=(
   cargo
