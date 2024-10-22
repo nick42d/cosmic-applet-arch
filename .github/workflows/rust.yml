@@ -17,7 +17,9 @@ jobs:
 
     steps:
     - name: Install packages
-      run: pacman -Syu rust pacman-contrib pkgconf libxkbcommon git just lld --noconfirm --needed
+      run: | 
+        pacman -Syu rust pacman-contrib pkgconf libxkbcommon git just lld --noconfirm --needed
+        pacman -Syu cosmic-icon-them dbus gcc-libs glibc libinput --noconfirm --needed
 
     - name: Checkout
       uses: actions/checkout@v4
