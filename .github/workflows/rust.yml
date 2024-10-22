@@ -17,7 +17,7 @@ jobs:
 
     steps:
     - name: Install packages
-      run: pacman -Syu rust pacman-contrib --noconfirm --needed
+      run: pacman -Syu rust pacman-contrib pkgconf git just lld --noconfirm --needed
 
     - name: Checkout
       uses: actions/checkout@v4
