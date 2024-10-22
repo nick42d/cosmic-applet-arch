@@ -1,6 +1,5 @@
-use crate::app::TIMEOUT;
-
 use super::{CosmicAppletArch, Message, CYCLES, INTERVAL, SUBSCRIPTION_BUF_SIZE};
+use crate::app::TIMEOUT;
 use arch_updates_rs::{DevelUpdate, Update};
 use chrono::{DateTime, Local};
 use cosmic::iced::futures::{channel::mpsc, SinkExt};
