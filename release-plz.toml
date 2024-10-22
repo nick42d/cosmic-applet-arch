@@ -5,6 +5,7 @@ git_tag_name = "{{ package }}/v{{ version }}"
 [[package]]
 name = "cosmic-applet-arch"
 publish = false
+semver_check = false
 
 [changelog]
 # This is based off the default, but adds breaking change description.

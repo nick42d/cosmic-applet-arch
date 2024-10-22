@@ -19,15 +19,14 @@ jobs:
     - name: Install packages
       run: | 
         pacman -Syu rust pacman-contrib pkgconf libxkbcommon git just lld --noconfirm --needed
-        pacman -Syu cosmic-icon-theme dbus gcc-libs glibc libinput --noconfirm --needed
 
     - name: Checkout
       uses: actions/checkout@v4
     
     - name: Build
-      run: cargo build --verbose
+      run: cargo build --verbose --locked
 
     - name: Run tests
       run: | 
-        cargo test --verbose --bins --lib
-        cargo test --verbose --doc
+        cargo test --verbose --locked --bins --lib
+        cargo test --verbose --locked --doc
