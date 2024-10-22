@@ -1,5 +1,6 @@
 [Desktop Entry]
 Name=Arch Updates COSMIC Applet
+Comment=Applet to check pacman and aur repo status
 Exec=cosmic-applet-arch
 Terminal=false
 Type=Application
