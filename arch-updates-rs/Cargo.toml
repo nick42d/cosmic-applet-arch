@@ -2,6 +2,11 @@
 name = "arch-updates-rs"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+description = "Library to query arch linux packaging tools to see if updates are available."
+homepage = "https://github.com/nick42d/cosmic-applet-arch"
+repository = "https://github.com/nick42d/cosmic-applet-arch"
+readme = "README.md"
 
 [dependencies]
 futures = "0.3.31"
