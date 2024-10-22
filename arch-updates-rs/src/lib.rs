@@ -130,10 +130,10 @@ struct PackageUrl<'a> {
 /// ```no_run
 /// # use arch_updates_rs::*;
 /// # async {
-/// let online = check_pacman_updates_online().await.unwrap();
+/// let updates = check_pacman_updates_online().await.unwrap();
 /// // Run `sudo pacman -Syu` in the terminal
 /// let updates = check_pacman_updates_online().await.unwrap();
-/// assert!(offline.is_empty());
+/// assert!(updates.is_empty());
 /// # };
 pub async fn check_pacman_updates_online() -> Result<Vec<Update>> {
     let output = Command::new("checkupdates")
