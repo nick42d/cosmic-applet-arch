@@ -1,7 +1,7 @@
 use crate::app::TIMEOUT;
 
 use super::{CosmicAppletArch, Message, CYCLES, INTERVAL, SUBSCRIPTION_BUF_SIZE};
-use arch_updates_rs::{CheckType, DevelUpdate, Update};
+use arch_updates_rs::{DevelUpdate, Update};
 use chrono::{DateTime, Local};
 use cosmic::iced::futures::{channel::mpsc, SinkExt};
 use futures::TryFutureExt;
@@ -47,8 +47,8 @@ pub fn subscription(app: &CosmicAppletArch) -> cosmic::iced::Subscription<Messag
             tokio::select! {
                 _ = interval.tick() => {
                     let check_type = match counter {
-                        0 => arch_updates_rs::CheckType::Online,
-                        _ => arch_updates_rs::CheckType::Offline,
+                        0 => CheckType::Online,
+                        _ => CheckType::Offline,
                     };
                     counter += 1;
                     if counter > CYCLES {
@@ -106,6 +106,12 @@ pub fn subscription(app: &CosmicAppletArch) -> cosmic::iced::Subscription<Messag
     cosmic::iced::subscription::channel(0, SUBSCRIPTION_BUF_SIZE, worker)
 }
 
+#[derive(Clone, Copy, Debug)]
+enum CheckType {
+    Online,
+    Offline,
+}
+
 #[derive(Default, Clone)]
 struct CacheState {
     aur_cache: Vec<Update>,
@@ -141,7 +147,7 @@ async fn get_updates_offline(cache: &CacheState) -> arch_updates_rs::Result<Upda
         devel_cache,
     } = cache;
     let (pacman, aur, devel) = join!(
-        arch_updates_rs::check_updates(CheckType::Offline),
+        arch_updates_rs::check_pacman_updates_offline(),
         arch_updates_rs::check_aur_updates_offline(aur_cache),
         arch_updates_rs::check_devel_updates_offline(devel_cache),
     );
@@ -154,7 +160,7 @@ async fn get_updates_offline(cache: &CacheState) -> arch_updates_rs::Result<Upda
 
 async fn get_updates_online() -> arch_updates_rs::Result<(Updates, CacheState)> {
     let (pacman, aur, devel) = join!(
-        arch_updates_rs::check_updates(CheckType::Online),
+        arch_updates_rs::check_pacman_updates_online(),
         arch_updates_rs::check_aur_updates_online(),
         arch_updates_rs::check_devel_updates_online(),
     );

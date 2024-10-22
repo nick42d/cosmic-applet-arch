@@ -1,23 +1,42 @@
 //! # arch_updates_rs
 //! Library to query arch linux packaging tools to see if updates are available.
 //! Designed for cosmic-applet-arch, but could be used in similar apps as well.
-//! # Usage
-//! ```no_run
+//!
+//! # Usage example
+//! This example shows how to check for updates online and print them to the
+//! terminal. It also shows how to check for updates offline, using the cache
+//! returned from the online check. If a system update is run in between as per
+//! the example, the offline check should return 0 updates due.
+//!
+//!```no_run
+//! use arch_updates_rs::*;
 //!
 //! #[tokio::main]
-//! pub async fn main() -> Result<(), arch_updates_ys::Error> {
-//!     let (pacman, aur, devel) = tokio::join!(
-//!         let pacman = check_updates(CheckType::Online),
-//!         let aur = check_aur_updates(CheckType::Online),
-//!         let devel = check_devel_updates(CheckType::Online),
-//!     ).await;
-//!
-//!     let cookie_path = std::path::Path::new("./cookie.txt");
-//!     let yt = ytmapi_rs::YtMusic::from_cookie_file(cookie_path).await?;
-//!     yt.get_search_suggestions("Beatles").await?;
-//!     let result = yt.get_search_suggestions("Beatles").await?;
-//!     println!("{:?}", result);
-//!     Ok(())
+//! pub async fn main() {
+//!     let (Ok(pacman), Ok((aur, aur_cache)), Ok((devel, devel_cache))) = tokio::join!(
+//!         check_pacman_updates_online(),
+//!         check_aur_updates_online(),
+//!         check_devel_updates_online(),
+//!     ) else {
+//!         panic!();
+//!     };
+//!     println!("pacman: {:#?}", pacman);
+//!     println!("aur: {:#?}", aur);
+//!     println!("devel: {:#?}", devel);
+//!     std::process::Command::new("paru")
+//!         .arg("-Syu")
+//!         .spawn()
+//!         .unwrap()
+//!         .wait()
+//!         .unwrap();
+//!     let (Ok(pacman), Ok(aur), Ok(devel)) = tokio::join!(
+//!         check_pacman_updates_offline(),
+//!         check_aur_updates_offline(&aur_cache),
+//!         check_devel_updates_offline(&devel_cache),
+//!     ) else {
+//!         panic!();
+//!     };
+//!     assert!(pacman.is_empty() && aur.is_empty() && devel.is_empty());
 //! }
 //! ```
 use core::str;
@@ -65,17 +84,8 @@ pub enum Error {
     ParseErrorPkgverPkgrel(String),
 }
 
-pub enum CheckType {
-    Online,
-    Offline,
-}
-
-#[derive(Debug)]
-pub struct UpdateCheckOutcome<T> {
-    pub updates: Result<Vec<T>>,
-    pub cache: Result<Vec<T>>,
-}
-
+/// Current status of an installed pacman or AUR package, vs the status of the
+/// latest version.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Update {
     pub pkgname: String,
@@ -85,6 +95,8 @@ pub struct Update {
     pub pkgrel_new: String,
 }
 
+/// Current status of an installed devel package, vs latest commit hash on the
+/// source repo.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct DevelUpdate {
     pub pkgname: String,
@@ -111,22 +123,51 @@ struct PackageUrl<'a> {
 
 /// Use the `checkupdates` function to check if any pacman-managed packages have
 /// updates due.
+///
+/// Online version - this function uses the network.
+///
 /// # Usage
 /// ```no_run
+/// # use arch_updates_rs::*;
 /// # async {
-/// let online = check_updates(CheckType::Online).await.unwrap();
-/// let offline = check_updates(CheckType::Offline).await.unwrap();
-/// assert_eq!(online, offline);
+/// let online = check_pacman_updates_online().await.unwrap();
 /// // Run `sudo pacman -Syu` in the terminal
-/// let offline = check_updates(CheckType::Offline).await.unwrap();
+/// let updates = check_pacman_updates_online().await.unwrap();
 /// assert!(offline.is_empty());
 /// # };
-pub async fn check_updates(check_type: CheckType) -> Result<Vec<Update>> {
-    let args = match check_type {
-        CheckType::Online => ["--nocolor"].as_slice(),
-        CheckType::Offline => ["--nosync", "--nocolor"].as_slice(),
-    };
-    let output = Command::new("checkupdates").args(args).output().await?;
+pub async fn check_pacman_updates_online() -> Result<Vec<Update>> {
+    let output = Command::new("checkupdates")
+        .arg("--nocolor")
+        .output()
+        .await?;
+    str::from_utf8(output.stdout.as_slice())?
+        .lines()
+        .map(parse_update)
+        .collect()
+}
+
+/// Use the `checkupdates` function to check if any pacman-managed packages have
+/// updates due.
+///
+/// Offline version - this function doesn't use the network, it doesn't require
+/// a cache either as `checkupdates` manages its own sync database.
+///
+/// # Usage
+/// ```no_run
+/// # use arch_updates_rs::*;
+/// # async {
+/// let online = check_pacman_updates_online().await.unwrap();
+/// let offline = check_pacman_updates_offline().await.unwrap();
+/// assert_eq!(online, offline);
+/// // Run `sudo pacman -Syu` in the terminal
+/// let offline = check_pacman_updates_offline().await.unwrap();
+/// assert!(offline.is_empty());
+/// # };
+pub async fn check_pacman_updates_offline() -> Result<Vec<Update>> {
+    let output = Command::new("checkupdates")
+        .args(["--nosync", "--nocolor"])
+        .output()
+        .await?;
     str::from_utf8(output.stdout.as_slice())?
         .lines()
         .map(parse_update)
@@ -148,23 +189,24 @@ pub async fn check_updates(check_type: CheckType) -> Result<Vec<Update>> {
 ///    date.
 ///  - This is also reliant on VCS packages being good
 ///    citizens and following the VCS Packaging Guidelines.
-///    https://wiki.archlinux.org/title/VCS_package_guidelines
+///    <https://wiki.archlinux.org/title/VCS_package_guidelines>
 /// # Usage
 /// ```no_run
+/// # use arch_updates_rs::*;
 /// # async {
-/// let (updates, cache) = check_devel_updates_online().await.unwrap();
+/// let (updates, _) = check_devel_updates_online().await.unwrap();
 /// // Run `paru -Syu` in the terminal
-/// let updates = check_devel_updates_online().await.unwrap();
+/// let (updates, _) = check_devel_updates_online().await.unwrap();
 /// assert!(updates.is_empty());
 /// # };
 pub async fn check_devel_updates_online() -> Result<(Vec<DevelUpdate>, Vec<DevelUpdate>)> {
     let devel_packages = get_devel_packages().await?;
     let devel_updates = futures::stream::iter(devel_packages.into_iter())
         .then(|pkg| async move {
-            compile_error!("Remove this unwrap!")
-            let srcinfo = get_aur_srcinfo(&pkg.pkgname).await.unwrap();
-            let source = srcinfo.base.source;
-            source
+            let updates = get_aur_srcinfo(&pkg.pkgname)
+                .await?
+                .base
+                .source
                 .into_iter()
                 .flat_map(move |arch| arch.vec.into_iter())
                 .filter_map(|url| {
@@ -189,9 +231,10 @@ pub async fn check_devel_updates_online() -> Result<(Vec<DevelUpdate>, Vec<Devel
                         })
                     }
                 })
-                .collect::<FuturesOrdered<_>>()
+                .collect::<FuturesOrdered<_>>();
+            Ok::<_, Error>(updates)
         })
-        .flatten()
+        .try_flatten()
         .try_collect::<Vec<_>>()
         .await?;
     Ok((
@@ -211,12 +254,13 @@ pub async fn check_devel_updates_online() -> Result<(Vec<DevelUpdate>, Vec<Devel
 /// all devel packages (returned from `check_devel_updates_online()`.
 /// # Usage
 /// ```no_run
+/// # use arch_updates_rs::*;
 /// # async {
 /// let (online, cache) = check_devel_updates_online().await.unwrap();
-/// let offline = check_devel_updates_online(&cache).await.unwrap();
+/// let offline = check_devel_updates_offline(&cache).await.unwrap();
 /// assert_eq!(online, offline);
 /// // Run `paru -Syu` in the terminal
-/// let offline = check_devel_updates_online(&cache).await.unwrap();
+/// let offline = check_devel_updates_offline(&cache).await.unwrap();
 /// assert!(offline.is_empty());
 /// # };
 pub async fn check_devel_updates_offline(cache: &[DevelUpdate]) -> Result<Vec<DevelUpdate>> {
@@ -251,10 +295,11 @@ pub async fn check_devel_updates_offline(cache: &[DevelUpdate]) -> Result<Vec<De
 ///    implemented and may return an error.
 /// # Usage
 /// ```no_run
+/// # use arch_updates_rs::*;
 /// # async {
-/// let (updates, cache) = check_aur_updates_online().await.unwrap();
+/// let (updates, _) = check_aur_updates_online().await.unwrap();
 /// // Run `paru -Syu` in the terminal
-/// let updates = check_aur_updates_online().await.unwrap();
+/// let (updates, _) = check_aur_updates_online().await.unwrap();
 /// assert!(updates.is_empty());
 /// # };
 pub async fn check_aur_updates_online() -> Result<(Vec<Update>, Vec<Update>)> {
@@ -298,9 +343,10 @@ pub async fn check_aur_updates_online() -> Result<(Vec<Update>, Vec<Update>)> {
 /// all aur packages (returned from `check_aur_updates_online()`.
 /// # Usage
 /// ```no_run
+/// # use arch_updates_rs::*;
 /// # async {
 /// let (online, cache) = check_aur_updates_online().await.unwrap();
-/// let offline = check_aur_updates_online(&cache).await.unwrap();
+/// let offline = check_aur_updates_offline(&cache).await.unwrap();
 /// assert_eq!(online, offline);
 /// // Run `paru -Syu` in the terminal
 /// let offline = check_aur_updates_offline(&cache).await.unwrap();
@@ -496,7 +542,7 @@ fn parse_update(value: &str) -> Result<Update> {
 
 /// Parse source field from .SRCINFO
 // NOTE: This is from paru (GPL3)
-fn parse_url<'a>(source: &'a str) -> Option<PackageUrl<'a>> {
+fn parse_url(source: &str) -> Option<PackageUrl> {
     let url = source.splitn(2, "::").last().unwrap();
 
     if !url.starts_with("git") || !url.contains("://") {
@@ -538,15 +584,15 @@ fn parse_url<'a>(source: &'a str) -> Option<PackageUrl<'a>> {
 mod tests {
     use crate::{
         check_aur_updates_offline, check_aur_updates_online, check_devel_updates_offline,
-        check_devel_updates_online, check_updates, get_aur_srcinfo, get_head_identifier,
-        parse_pacman_qm, parse_update, parse_url, parse_ver_and_rel, CheckType, Error, Package,
-        PackageUrl, Update,
+        check_devel_updates_online, check_pacman_updates_offline, check_pacman_updates_online,
+        get_aur_srcinfo, get_head_identifier, parse_pacman_qm, parse_update, parse_url,
+        parse_ver_and_rel, Error, Package, PackageUrl, Update,
     };
 
     #[tokio::test]
-    async fn test_check_updates() {
-        let online = check_updates(CheckType::Online).await.unwrap();
-        let offline = check_updates(CheckType::Offline).await.unwrap();
+    async fn test_check_pacman_updates() {
+        let online = check_pacman_updates_online().await.unwrap();
+        let offline = check_pacman_updates_offline().await.unwrap();
         assert_eq!(online, offline);
     }
     #[tokio::test]
