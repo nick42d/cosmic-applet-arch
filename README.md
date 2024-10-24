@@ -8,7 +8,8 @@ Inspired by https://github.com/savely-krasovsky/waybar-updates and https://githu
 Please refer to `arch-updates-rs/README.md` for more information.
 
 ## How to use
-The package is in the AUR under `cosmic-applet-arch`. You can install it via your favourite AUR helper, e.g `paru -Syu cosmic-applet-arch`.
+- The package is in the AUR under `cosmic-applet-arch`. You can install it via your favourite AUR helper, e.g `paru -Syu cosmic-applet-arch`.
+- Once installed, the app can be added via the COSMIC Settings app -> Desktop -> Panel/Dock -> Configure panel/dock applets -> Add applet.
 
 ## Features
  - Native COSMIC look and feel, supporting both light and dark mode.
