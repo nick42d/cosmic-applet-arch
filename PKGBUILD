@@ -12,14 +12,7 @@ depends=(
   git
   pacman-contrib
   openssl
-  gcc-libs
-  glibc
   libxkbcommon
-# May not need all of these
-  dbus
-  libinput
-  libpulse
-  systemd-libs
 )
 makedepends=(
   pkgconf
