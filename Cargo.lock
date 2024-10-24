@@ -136,7 +136,7 @@ checksum = "69f7f8c3906b62b754cd5326047894316021dcfe5a194c8ea52bdd94934a3457"
 
 [[package]]
 name = "arch-updates-rs"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "futures",
  "raur",
@@ -919,7 +919,7 @@ dependencies = [
 
 [[package]]
 name = "cosmic-applet-arch"
-version = "0.1.0-beta.1"
+version = "1.0.0-beta.1"
 dependencies = [
  "arch-updates-rs",
  "chrono",
@@ -929,7 +929,9 @@ dependencies = [
  "itertools 0.13.0",
  "libcosmic",
  "open",
+ "ron",
  "rust-embed",
+ "serde",
  "tokio",
 ]
 
