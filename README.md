@@ -7,6 +7,9 @@ Inspired by https://github.com/savely-krasovsky/waybar-updates and https://githu
 # arch_updates_rs - Arch updates API
 Please refer to `arch-updates-rs/README.md` for more information.
 
+## How to use
+The package is in the AUR under `cosmic-applet-arch`. You can install it via your favourite AUR helper, e.g `paru -Syu cosmic-applet-arch`.
+
 ## Features
  - Native COSMIC look and feel, supporting both light and dark mode.
  - pacman, AUR, and devel package upgrades shown.
@@ -15,13 +18,8 @@ Please refer to `arch-updates-rs/README.md` for more information.
 
 ## Development setup
 
-To install this COSMIC applet, you will need [just](https://github.com/casey/just), if you're on Pop!\_OS, you can install it with the following command:
-
-```sh
-sudo apt install just
-```
-
-After you install it, you can run the following commands to build and install your applet:
+Development dependencies are listed on the [PKGBUILD in the AUR](https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=cosmic-applet-arch)
+You can run the following commands to build and install:
 
 ```sh
 just build-release
