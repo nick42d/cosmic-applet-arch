@@ -141,6 +141,9 @@ where
 }
 
 async fn get_updates_offline(cache: &CacheState) -> arch_updates_rs::Result<Updates> {
+    #[cfg(feature = "mock-api")]
+    return mock::get_mock_updates().await;
+
     let CacheState {
         aur_cache,
         devel_cache,
@@ -176,4 +179,85 @@ async fn get_updates_online() -> arch_updates_rs::Result<(Updates, CacheState)> 
             devel_cache,
         },
     ))
+}
+
+#[cfg(feature = "mock-api")]
+/// This module provides a way to feed mock data to the app when compiled with
+/// the mock-api feature using the mock_updates.ron file.
+mod mock {
+    use super::Updates;
+    use arch_updates_rs::{DevelUpdate, Update};
+    use serde::Deserialize;
+
+    #[derive(Clone, Debug, Default, Deserialize)]
+    pub struct MockUpdates {
+        pub pacman: Vec<MockUpdate>,
+        pub aur: Vec<MockUpdate>,
+        pub devel: Vec<MockDevelUpdate>,
+    }
+    #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
+    pub struct MockUpdate {
+        pub pkgname: String,
+        pub pkgver_cur: String,
+        pub pkgrel_cur: String,
+        pub pkgver_new: String,
+        pub pkgrel_new: String,
+    }
+    #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
+    pub struct MockDevelUpdate {
+        pub pkgname: String,
+        pub pkgver_cur: String,
+        pub pkgrel_cur: String,
+        pub ref_id_new: String,
+    }
+    impl From<MockUpdates> for Updates {
+        fn from(value: MockUpdates) -> Updates {
+            let MockUpdates { pacman, aur, devel } = value;
+            Updates {
+                pacman: pacman.into_iter().map(Into::into).collect(),
+                aur: aur.into_iter().map(Into::into).collect(),
+                devel: devel.into_iter().map(Into::into).collect(),
+            }
+        }
+    }
+    impl From<MockDevelUpdate> for DevelUpdate {
+        fn from(value: MockDevelUpdate) -> DevelUpdate {
+            let MockDevelUpdate {
+                pkgname,
+                pkgver_cur,
+                pkgrel_cur,
+                ref_id_new,
+            } = value;
+            DevelUpdate {
+                pkgname,
+                pkgver_cur,
+                pkgrel_cur,
+                ref_id_new,
+            }
+        }
+    }
+    impl From<MockUpdate> for Update {
+        fn from(value: MockUpdate) -> Update {
+            let MockUpdate {
+                pkgname,
+                pkgver_cur,
+                pkgrel_cur,
+                pkgver_new,
+                pkgrel_new,
+            } = value;
+            Update {
+                pkgname,
+                pkgver_cur,
+                pkgrel_cur,
+                pkgver_new,
+                pkgrel_new,
+            }
+        }
+    }
+
+    pub async fn get_mock_updates() -> arch_updates_rs::Result<Updates> {
+        let file = tokio::fs::read_to_string("mock_updates.ron").await.unwrap();
+        let updates: MockUpdates = ron::from_str(&file).unwrap();
+        Ok(updates.into())
+    }
 }

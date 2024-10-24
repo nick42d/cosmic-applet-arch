@@ -4,3 +4,6 @@ members = [
     "cosmic-applet-arch",
 ]
 resolver = "2"
+
+[profile.release]
+lto = "fat"

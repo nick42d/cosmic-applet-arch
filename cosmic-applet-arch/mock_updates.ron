@@ -1,0 +1,15 @@
+MockUpdates(
+    pacman: [
+        MockUpdate(
+            pkgname: "test",
+            pkgver_cur: "1.2.3",
+            pkgrel_cur: "1",
+            pkgver_new: "1.2.4",
+            pkgrel_new: "1",
+        )
+    ],
+    aur: [],
+    devel: [],
+)
+
+
