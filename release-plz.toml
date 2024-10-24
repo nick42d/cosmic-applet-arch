@@ -1,11 +1,19 @@
 [workspace]
 git_tag_name = "{{ package }}/v{{ version }}"
+publish = false
+semver_check = false
 
 # disable cargo publish for comsic-applet-arch binary.
 [[package]]
 name = "cosmic-applet-arch"
-publish = false
-semver_check = false
+release = false
+# git_release_enable = false
+
+# disable cargo publish for comsic-applet-arch binary.
+[[package]]
+name = "arch-updates-rs"
+publish = true
+semver_check = true
 
 [changelog]
 # This is based off the default, but adds breaking change description.
