@@ -22,7 +22,7 @@ makedepends=(
   lld
 )
 source=(git+https://github.com/nick42d/cosmic-applet-arch.git#tag=${pkgname}-v${pkgver})
-b2sums=('22c773f49f35c34ef7cca4e242780a20e9d1db08c90399f7d31ee06ee3ed5a7c0d72338f25dff33a3a42a37b5940a9d05a61893759194ed135874fa0d388681e')
+b2sums=('3d3fd69b9d120d4830302e673c4eb5502680dc0ce30b123cda096f0c2e405b0cb09951e527f0d2e0fa937dc5ac3ee13460e11f6fa429500f231ee471a5b75a87')
 
 prepare() {
   cd cosmic-applet-arch
