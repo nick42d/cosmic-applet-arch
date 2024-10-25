@@ -1,5 +1,5 @@
 # Arch Updates - COSMIC Applet
-WIP - COSMIC Applet to display Arch Linux package status.
+COSMIC Applet to display Arch Linux package status.
 Inspired by https://github.com/savely-krasovsky/waybar-updates and https://github.com/RaphaelRochet/arch-update.
 
 ![image](https://github.com/user-attachments/assets/61d0e2af-4036-4dd9-948c-55833f0f8230)
