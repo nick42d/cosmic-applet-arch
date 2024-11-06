@@ -303,18 +303,7 @@ pub fn applet_button_with_text<'a, Message: 'static>(
     // Hardcode to symbolic = true.
     let suggested = core.applet.suggested_size(true);
     let applet_padding = core.applet.suggested_padding(true);
-
-    let (mut configured_width, mut configured_height) = core.applet.suggested_window_size();
-
-    // Adjust the width to include padding and force the crosswise dim to match the
-    // window size
-    let is_horizontal = core.applet.is_horizontal();
-    if is_horizontal {
-        configured_width = NonZeroU32::new(suggested.0 as u32 + applet_padding as u32 * 2).unwrap();
-    } else {
-        configured_height =
-            NonZeroU32::new(suggested.1 as u32 + applet_padding as u32 * 2).unwrap();
-    }
+    let (configured_width, _) = core.applet.suggested_window_size();
 
     let icon = cosmic::widget::icon::from_name(icon_name.as_ref())
         .symbolic(true)
@@ -329,18 +318,27 @@ pub fn applet_button_with_text<'a, Message: 'static>(
         .width(Length::Fixed(suggested.0 as f32))
         .height(Length::Fixed(suggested.1 as f32))
         .into();
-    let text = core.applet.text(text);
-    cosmic::widget::button::custom(
-        cosmic::widget::container(
+    let text = core
+        .applet
+        .text(text)
+        .wrapping(cosmic::iced_core::text::Wrapping::Glyph);
+    // Column or row layout depends on panel position.
+    // TODO: handle text overflow when vertical.
+    let container = if core.applet.is_horizontal() {
+        cosmic::widget::layer_container(
             cosmic::widget::row::with_children(vec![icon, text.into()])
                 .align_y(cosmic::iced::Alignment::Center)
                 .spacing(2),
         )
-        .align_x(Horizontal::Center)
-        .align_y(Vertical::Center)
-        .height(Length::Fill),
-    )
-    // TODO: Decide what to do if vertical.
-    .height(Length::Fixed(configured_height.get() as f32))
-    .class(Button::AppletIcon)
+    } else {
+        cosmic::widget::layer_container(
+            cosmic::widget::column::with_children(vec![icon, text.into()])
+                .align_x(cosmic::iced::Alignment::Center)
+                .max_width(configured_width.get() as f32)
+                .spacing(2),
+        )
+    }
+    .align_x(Horizontal::Center.into())
+    .align_y(Vertical::Center.into());
+    cosmic::widget::button::custom(container).class(Button::AppletIcon)
 }
