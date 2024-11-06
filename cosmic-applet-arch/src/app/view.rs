@@ -1,25 +1,24 @@
-use crate::fl;
-
 use super::{CosmicAppletArch, Message};
+use crate::fl;
 use arch_updates_rs::{DevelUpdate, Update};
 use cosmic::{
     app::Core,
     applet::{cosmic_panel_config::PanelSize, Size},
     iced::{
         alignment::{Horizontal, Vertical},
-        window::Id,
         Length,
     },
     iced_widget::{column, row},
-    prelude::CollectionWidget,
     theme::{self, Button},
-    widget::{JustifyContent, Widget},
+    widget::{Id, JustifyContent, Widget},
     Application, Element,
 };
-use std::num::NonZeroU32;
-use std::rc::Rc;
+use std::{fmt::Display, num::NonZeroU32};
+use std::{rc::Rc, sync::LazyLock};
 
 const MAX_LINES: usize = 20;
+
+static AUTOSIZE_MAIN_ID: LazyLock<Id> = LazyLock::new(|| Id::new("autosize-main"));
 
 enum AppIcon {
     Loading,
@@ -66,21 +65,23 @@ pub fn view(app: &CosmicAppletArch) -> Element<Message> {
         }
     }
 
-    if total_updates > 0 {
-        applet_button_with_text(app.core(), icon.to_str(), format!("{total_updates}"))
-            .on_press_down(Message::TogglePopup)
-            .into()
-    } else {
-        app.core
-            .applet
-            .icon_button(icon.to_str())
-            .on_press_down(Message::TogglePopup)
-            .into()
-    }
+    cosmic::widget::autosize::autosize(
+        if total_updates > 0 {
+            applet_button_with_text(app.core(), icon.to_str(), format!("{total_updates}"))
+                .on_press_down(Message::TogglePopup)
+        } else {
+            app.core
+                .applet
+                .icon_button(icon.to_str())
+                .on_press_down(Message::TogglePopup)
+        },
+        AUTOSIZE_MAIN_ID.clone(),
+    )
+    .into()
 }
 
 // view_window is what is displayed in the popup.
-pub fn view_window(app: &CosmicAppletArch, _id: Id) -> Element<Message> {
+pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Element<Message> {
     let cosmic::cosmic_theme::Spacing {
         space_xxs, space_s, ..
     } = theme::active().cosmic().spacing;
@@ -152,7 +153,7 @@ pub fn view_window(app: &CosmicAppletArch, _id: Id) -> Element<Message> {
             )))
             .on_press(Message::ForceGetUpdates),
         )
-        .push_maybe(app.error.as_ref().map(|e| errors_row(format!("{e}"))));
+        .push_maybe(app.error.as_ref().map(errors_row));
     app.core.applet.popup_container(content_list).into()
 }
 
@@ -184,18 +185,18 @@ fn body_text_row(text: String) -> Element<'static, Message> {
         cosmic::widget::text::body(text)
             .width(Length::Fill)
             .height(Length::Fixed(24.0))
-            .vertical_alignment(Vertical::Center),
+            .align_y(Vertical::Center),
     )
     .padding(cosmic::applet::menu_control_padding())
     .into()
 }
 
-fn errors_row(error: String) -> Element<'static, Message> {
+fn errors_row(error: impl Display) -> Element<'static, Message> {
     cosmic::widget::container(
         cosmic::widget::text::body(format!("Warning: {error}!!"))
             .width(Length::Fill)
             .height(Length::Fixed(24.0))
-            .vertical_alignment(Vertical::Center),
+            .align_y(Vertical::Center),
     )
     .padding(cosmic::applet::menu_control_padding())
     .into()
@@ -229,7 +230,7 @@ fn collapsible_two_column_list<'a>(
         cosmic::widget::text::body(title)
             .width(Length::Fill)
             .height(Length::Fixed(24.0))
-            .vertical_alignment(Vertical::Center),
+            .align_y(Vertical::Center),
         cosmic::widget::container(
             cosmic::widget::icon::from_name(icon_name)
                 .size(16)
@@ -319,16 +320,11 @@ pub fn applet_button_with_text<'a, Message: 'static>(
         .size(suggested.0)
         .into();
     let icon = cosmic::widget::icon(icon)
-        .style(cosmic::theme::Svg::Custom(Rc::new(|theme| {
-            cosmic::widget::svg::Appearance {
+        .class(cosmic::theme::Svg::Custom(Rc::new(|theme| {
+            cosmic::widget::svg::Style {
                 color: Some(theme.cosmic().background.on.into()),
             }
         })))
-        // .class(cosmic::theme::Svg::Custom(Rc::new(|theme| {
-        //     cosmic::widget::svg::Style {
-        //         color: Some(theme.cosmic().background.on.into()),
-        //     }
-        // })))
         .width(Length::Fixed(suggested.0 as f32))
         .height(Length::Fixed(suggested.1 as f32))
         .into();
@@ -344,7 +340,7 @@ pub fn applet_button_with_text<'a, Message: 'static>(
     cosmic::widget::button::custom(
         cosmic::widget::container(
             cosmic::widget::row::with_children(vec![icon, text.into()])
-                .align_items(cosmic::iced::Alignment::Center)
+                .align_y(cosmic::iced::Alignment::Center)
                 .spacing(2),
         )
         .align_x(Horizontal::Center)
@@ -353,5 +349,5 @@ pub fn applet_button_with_text<'a, Message: 'static>(
     )
     // TODO: Decide what to do if vertical.
     .height(Length::Fixed(configured_height.get() as f32))
-    .style(Button::AppletIcon)
+    .class(Button::AppletIcon)
 }

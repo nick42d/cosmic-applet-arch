@@ -1,6 +1,6 @@
 use chrono::{DateTime, Local};
-use cosmic::app::{Command, Core};
-use cosmic::iced::wayland::popup::{destroy_popup, get_popup};
+use cosmic::app::{Core, Task};
+use cosmic::iced::platform_specific::shell::wayland::commands::popup::{destroy_popup, get_popup};
 use cosmic::iced::window::Id;
 use cosmic::iced::Limits;
 use cosmic::{Application, Element};
@@ -73,22 +73,19 @@ impl Application for CosmicAppletArch {
         &mut self.core
     }
     // Use default cosmic applet style
-    fn style(
-        &self,
-    ) -> Option<<cosmic::Theme as cosmic::iced_style::application::StyleSheet>::Style> {
-        // fn style(&self) -> Option<cosmic::iced_runtime::Appearance> {
+    fn style(&self) -> Option<cosmic::iced_runtime::Appearance> {
         Some(cosmic::applet::style())
     }
     // Entry point for libcosmic init.
     // Core is passed by libcosmic, and caller can pass some state in Flags.
-    // On load we can immediately run an async task by returning a Command as the
+    // On load we can immediately run an async task by returning a Task as the
     // second component of the tuple.
-    fn init(core: Core, _flags: Self::Flags) -> (Self, Command<Self::Message>) {
+    fn init(core: Core, _flags: Self::Flags) -> (Self, Task<Self::Message>) {
         let app = CosmicAppletArch {
             core,
             ..Default::default()
         };
-        (app, Command::none())
+        (app, Task::none())
     }
     fn on_close_requested(&self, id: Id) -> Option<Message> {
         Some(Message::PopupClosed(id))
@@ -101,9 +98,9 @@ impl Application for CosmicAppletArch {
     fn view_window(&self, id: Id) -> Element<Self::Message> {
         view::view_window(self, id)
     }
-    // NOTE: Commands may be returned for asynchronous execution on a
+    // NOTE: Tasks may be returned for asynchronous execution on a
     // background thread managed by the application's executor.
-    fn update(&mut self, message: Self::Message) -> Command<Self::Message> {
+    fn update(&mut self, message: Self::Message) -> Task<Self::Message> {
         match message {
             Message::TogglePopup => self.handle_toggle_popup(),
             Message::PopupClosed(id) => self.handle_popup_closed(id),
@@ -123,7 +120,7 @@ impl Application for CosmicAppletArch {
 }
 
 impl CosmicAppletArch {
-    fn handle_toggle_popup(&mut self) -> Command<Message> {
+    fn handle_toggle_popup(&mut self) -> Task<Message> {
         if let Some(p) = self.popup.take() {
             destroy_popup(p)
         } else {
@@ -132,11 +129,15 @@ impl CosmicAppletArch {
             self.devel_list_state = Collapsed::Collapsed;
             let new_id = Id::unique();
             self.popup.replace(new_id);
-            let mut popup_settings = self
-                .core
-                .applet
-                // .get_popup_settings(Id::RESERVED, new_id, None, None, None);
-                .get_popup_settings(Id::MAIN, new_id, None, None, None);
+            let mut popup_settings = self.core.applet.get_popup_settings(
+                // Unwrap safety: this approach was used in the official cosmic applets
+                // https://github.com/pop-os/cosmic-applets/commit/5b5cd77e7c75d0f5a8eab96231adca4cb7a02786#diff-644c3fce2a26d21e536fd2da1a183f63a2549053f1441dfe931286a115807916R309
+                self.core.main_window_id().unwrap(),
+                new_id,
+                None,
+                None,
+                None,
+            );
             popup_settings.positioner.size_limits = Limits::NONE
                 .max_width(444.0)
                 .min_width(300.0)
@@ -145,38 +146,34 @@ impl CosmicAppletArch {
             get_popup(popup_settings)
         }
     }
-    fn handle_toggle_collapsible(&mut self, update_type: UpdateType) -> Command<Message> {
+    fn handle_toggle_collapsible(&mut self, update_type: UpdateType) -> Task<Message> {
         match update_type {
             UpdateType::Aur => self.aur_list_state = self.aur_list_state.toggle(),
             UpdateType::Pacman => self.pacman_list_state = self.pacman_list_state.toggle(),
             UpdateType::Devel => self.devel_list_state = self.devel_list_state.toggle(),
         }
-        Command::none()
+        Task::none()
     }
-    fn handle_popup_closed(&mut self, id: Id) -> Command<Message> {
+    fn handle_popup_closed(&mut self, id: Id) -> Task<Message> {
         if self.popup.as_ref() == Some(&id) {
             self.popup = None;
         }
-        Command::none()
+        Task::none()
     }
-    fn handle_force_get_updates(&mut self) -> Command<Message> {
+    fn handle_force_get_updates(&mut self) -> Task<Message> {
         self.refresh_pressed_notifier.notify_one();
-        Command::none()
+        Task::none()
     }
-    fn handle_update_error(&mut self, error: String) -> Command<Message> {
+    fn handle_update_error(&mut self, error: String) -> Task<Message> {
         self.error = Some(error);
-        Command::none()
+        Task::none()
     }
-    fn handle_updates(
-        &mut self,
-        updates: Updates,
-        time: Option<DateTime<Local>>,
-    ) -> Command<Message> {
+    fn handle_updates(&mut self, updates: Updates, time: Option<DateTime<Local>>) -> Task<Message> {
         self.updates = Some(updates);
         if let Some(time) = time {
             self.last_checked = Some(time);
         }
         self.error = None;
-        Command::none()
+        Task::none()
     }
 }

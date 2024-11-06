@@ -18,8 +18,9 @@ ron = { version = "0.8.1", optional = true }
 
 [dependencies.libcosmic]
 git = "https://github.com/pop-os/libcosmic.git"
-# Commit pegged due to removal of autosize - expecting to see a solution upstream in cosmic time applet and then we can update.
-rev = "9e064e7"
+# To keep builds reproducible, libcosmic should be pegged to a rev.
+# This should be updated periodically.
+rev = "8d4afb9"
 default-features = false
 features = ["applet", "tokio", "wayland"]
 
