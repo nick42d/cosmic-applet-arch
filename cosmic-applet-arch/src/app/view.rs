@@ -18,6 +18,7 @@ use std::{rc::Rc, sync::LazyLock};
 
 const MAX_LINES: usize = 20;
 
+// This is the same mechanism the official cosmic applets use.
 static AUTOSIZE_MAIN_ID: LazyLock<Id> = LazyLock::new(|| Id::new("autosize-main"));
 
 enum AppIcon {
