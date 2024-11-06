@@ -6,14 +6,14 @@ use cosmic::{
     applet::{cosmic_panel_config::PanelSize, Size},
     iced::{
         alignment::{Horizontal, Vertical},
-        Length,
+        Length, Limits,
     },
     iced_widget::{column, row},
     theme::{self, Button},
     widget::{Id, JustifyContent, Widget},
     Application, Element,
 };
-use std::{fmt::Display, num::NonZeroU32};
+use std::{borrow::Cow, fmt::Display, num::NonZeroU32};
 use std::{rc::Rc, sync::LazyLock};
 
 const MAX_LINES: usize = 20;
@@ -298,7 +298,7 @@ fn pretty_print_devel_update(update: &DevelUpdate) -> (String, String) {
 pub fn applet_button_with_text<'a, Message: 'static>(
     core: &Core,
     icon_name: impl AsRef<str>,
-    text: impl ToString,
+    text: impl Into<Cow<'a, str>>,
 ) -> cosmic::widget::Button<'a, Message> {
     // Hardcode to symbolic = true.
     let suggested = core.applet.suggested_size(true);
@@ -329,15 +329,7 @@ pub fn applet_button_with_text<'a, Message: 'static>(
         .width(Length::Fixed(suggested.0 as f32))
         .height(Length::Fixed(suggested.1 as f32))
         .into();
-    let t = match core.applet.size {
-        Size::PanelSize(PanelSize::XL) => cosmic::widget::text::title2,
-        Size::PanelSize(PanelSize::L) => cosmic::widget::text::title3,
-        Size::PanelSize(PanelSize::M) => cosmic::widget::text::title4,
-        Size::PanelSize(PanelSize::S) => cosmic::widget::text::body,
-        Size::PanelSize(PanelSize::XS) => cosmic::widget::text::body,
-        Size::Hardcoded(_) => cosmic::widget::text,
-    };
-    let text = t(text.to_string()).font(cosmic::font::default());
+    let text = core.applet.text(text);
     cosmic::widget::button::custom(
         cosmic::widget::container(
             cosmic::widget::row::with_children(vec![icon, text.into()])

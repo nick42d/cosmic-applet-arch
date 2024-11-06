@@ -20,7 +20,7 @@ ron = { version = "0.8.1", optional = true }
 git = "https://github.com/pop-os/libcosmic.git"
 # To keep builds reproducible, libcosmic should be pegged to a rev.
 # This should be updated periodically.
-rev = "8d4afb9"
+rev = "4b56286"
 default-features = false
 features = ["applet", "tokio", "wayland"]
 
