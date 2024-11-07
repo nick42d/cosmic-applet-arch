@@ -1011,7 +1011,7 @@ dependencies = [
 
 [[package]]
 name = "cosmic-applet-arch"
-version = "1.0.0-beta.1"
+version = "1.0.0-beta.3"
 dependencies = [
  "arch-updates-rs",
  "chrono",
