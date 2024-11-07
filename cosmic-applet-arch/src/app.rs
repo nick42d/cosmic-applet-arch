@@ -169,11 +169,22 @@ impl CosmicAppletArch {
         Task::none()
     }
     fn handle_updates(&mut self, updates: Updates, time: Option<DateTime<Local>>) -> Task<Message> {
+        // When first receiving updates, autosize will not trigger until the second
+        // message is received. So, we intentionally bounce this message if it's
+        // the first time updates have been received.
+        let task: Task<Message> = if self.updates.is_none() {
+            Task::done(cosmic::app::Message::App(Message::CheckUpdatesMsg {
+                updates: updates.clone(),
+                checked_online_time: time,
+            }))
+        } else {
+            Task::none()
+        };
         self.updates = Some(updates);
         if let Some(time) = time {
             self.last_checked = Some(time);
         }
         self.error = None;
-        Task::none()
+        task
     }
 }

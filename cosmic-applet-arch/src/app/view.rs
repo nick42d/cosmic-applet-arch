@@ -3,17 +3,15 @@ use crate::fl;
 use arch_updates_rs::{DevelUpdate, Update};
 use cosmic::{
     app::Core,
-    applet::{cosmic_panel_config::PanelSize, Size},
     iced::{
         alignment::{Horizontal, Vertical},
-        Length, Limits,
+        Length,
     },
-    iced_widget::{column, row},
     theme::{self, Button},
     widget::{Id, JustifyContent, Widget},
     Application, Element,
 };
-use std::{borrow::Cow, fmt::Display, num::NonZeroU32};
+use std::{borrow::Cow, fmt::Display};
 use std::{rc::Rc, sync::LazyLock};
 
 const MAX_LINES: usize = 20;
@@ -227,7 +225,7 @@ fn collapsible_two_column_list<'a>(
         }
     };
 
-    let heading = cosmic::applet::menu_button(row![
+    let heading = cosmic::applet::menu_button(cosmic::iced_widget::row![
         cosmic::widget::text::body(title)
             .width(Length::Fill)
             .height(Length::Fixed(24.0))
@@ -248,7 +246,7 @@ fn collapsible_two_column_list<'a>(
         Collapsed::Expanded => {
             let children =
                 two_column_text_widget(text.take(max_items).chain(overflow_line), space_xxs);
-            column![heading, children].into()
+            cosmic::iced_widget::column![heading, children].into()
         }
     }
 }
@@ -302,7 +300,6 @@ pub fn applet_button_with_text<'a, Message: 'static>(
 ) -> cosmic::widget::Button<'a, Message> {
     // Hardcode to symbolic = true.
     let suggested = core.applet.suggested_size(true);
-    let applet_padding = core.applet.suggested_padding(true);
     let (configured_width, _) = core.applet.suggested_window_size();
 
     let icon = cosmic::widget::icon::from_name(icon_name.as_ref())
