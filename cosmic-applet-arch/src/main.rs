@@ -8,5 +8,5 @@ mod core;
 use app::CosmicAppletArch;
 
 fn main() -> cosmic::iced::Result {
-    cosmic::applet::run::<CosmicAppletArch>(true, ())
+    cosmic::applet::run::<CosmicAppletArch>(())
 }

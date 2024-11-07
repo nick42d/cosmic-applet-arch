@@ -1,25 +1,23 @@
-use crate::fl;
-
 use super::{CosmicAppletArch, Message};
+use crate::fl;
 use arch_updates_rs::{DevelUpdate, Update};
 use cosmic::{
     app::Core,
-    applet::{cosmic_panel_config::PanelSize, Size},
     iced::{
         alignment::{Horizontal, Vertical},
-        window::Id,
         Length,
     },
-    iced_widget::{column, row},
-    prelude::CollectionWidget,
     theme::{self, Button},
-    widget::{JustifyContent, Widget},
+    widget::{Id, JustifyContent, Widget},
     Application, Element,
 };
-use std::num::NonZeroU32;
-use std::rc::Rc;
+use std::{borrow::Cow, fmt::Display};
+use std::{rc::Rc, sync::LazyLock};
 
 const MAX_LINES: usize = 20;
+
+// This is the same mechanism the official cosmic applets use.
+static AUTOSIZE_MAIN_ID: LazyLock<Id> = LazyLock::new(|| Id::new("autosize-main"));
 
 enum AppIcon {
     Loading,
@@ -66,21 +64,25 @@ pub fn view(app: &CosmicAppletArch) -> Element<Message> {
         }
     }
 
-    if total_updates > 0 {
-        applet_button_with_text(app.core(), icon.to_str(), format!("{total_updates}"))
-            .on_press_down(Message::TogglePopup)
-            .into()
-    } else {
-        app.core
-            .applet
-            .icon_button(icon.to_str())
-            .on_press_down(Message::TogglePopup)
-            .into()
-    }
+    // TODO: Set a width when layout is vertical, button should be same width as
+    // others.
+    cosmic::widget::autosize::autosize(
+        if total_updates > 0 {
+            applet_button_with_text(app.core(), icon.to_str(), format!("{total_updates}"))
+                .on_press_down(Message::TogglePopup)
+        } else {
+            app.core
+                .applet
+                .icon_button(icon.to_str())
+                .on_press_down(Message::TogglePopup)
+        },
+        AUTOSIZE_MAIN_ID.clone(),
+    )
+    .into()
 }
 
 // view_window is what is displayed in the popup.
-pub fn view_window(app: &CosmicAppletArch, _id: Id) -> Element<Message> {
+pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Element<Message> {
     let cosmic::cosmic_theme::Spacing {
         space_xxs, space_s, ..
     } = theme::active().cosmic().spacing;
@@ -152,7 +154,7 @@ pub fn view_window(app: &CosmicAppletArch, _id: Id) -> Element<Message> {
             )))
             .on_press(Message::ForceGetUpdates),
         )
-        .push_maybe(app.error.as_ref().map(|e| errors_row(format!("{e}"))));
+        .push_maybe(app.error.as_ref().map(errors_row));
     app.core.applet.popup_container(content_list).into()
 }
 
@@ -184,18 +186,18 @@ fn body_text_row(text: String) -> Element<'static, Message> {
         cosmic::widget::text::body(text)
             .width(Length::Fill)
             .height(Length::Fixed(24.0))
-            .vertical_alignment(Vertical::Center),
+            .align_y(Vertical::Center),
     )
     .padding(cosmic::applet::menu_control_padding())
     .into()
 }
 
-fn errors_row(error: String) -> Element<'static, Message> {
+fn errors_row(error: impl Display) -> Element<'static, Message> {
     cosmic::widget::container(
         cosmic::widget::text::body(format!("Warning: {error}!!"))
             .width(Length::Fill)
             .height(Length::Fixed(24.0))
-            .vertical_alignment(Vertical::Center),
+            .align_y(Vertical::Center),
     )
     .padding(cosmic::applet::menu_control_padding())
     .into()
@@ -225,11 +227,11 @@ fn collapsible_two_column_list<'a>(
         }
     };
 
-    let heading = cosmic::applet::menu_button(row![
+    let heading = cosmic::applet::menu_button(cosmic::iced_widget::row![
         cosmic::widget::text::body(title)
             .width(Length::Fill)
             .height(Length::Fixed(24.0))
-            .vertical_alignment(Vertical::Center),
+            .align_y(Vertical::Center),
         cosmic::widget::container(
             cosmic::widget::icon::from_name(icon_name)
                 .size(16)
@@ -246,7 +248,7 @@ fn collapsible_two_column_list<'a>(
         Collapsed::Expanded => {
             let children =
                 two_column_text_widget(text.take(max_items).chain(overflow_line), space_xxs);
-            column![heading, children].into()
+            cosmic::iced_widget::column![heading, children].into()
         }
     }
 }
@@ -296,62 +298,46 @@ fn pretty_print_devel_update(update: &DevelUpdate) -> (String, String) {
 pub fn applet_button_with_text<'a, Message: 'static>(
     core: &Core,
     icon_name: impl AsRef<str>,
-    text: impl ToString,
+    text: impl Into<Cow<'a, str>>,
 ) -> cosmic::widget::Button<'a, Message> {
     // Hardcode to symbolic = true.
     let suggested = core.applet.suggested_size(true);
-    let applet_padding = core.applet.suggested_padding(true);
-
-    let (mut configured_width, mut configured_height) = core.applet.suggested_window_size();
-
-    // Adjust the width to include padding and force the crosswise dim to match the
-    // window size
-    let is_horizontal = core.applet.is_horizontal();
-    if is_horizontal {
-        configured_width = NonZeroU32::new(suggested.0 as u32 + applet_padding as u32 * 2).unwrap();
-    } else {
-        configured_height =
-            NonZeroU32::new(suggested.1 as u32 + applet_padding as u32 * 2).unwrap();
-    }
+    let (configured_width, _) = core.applet.suggested_window_size();
 
     let icon = cosmic::widget::icon::from_name(icon_name.as_ref())
         .symbolic(true)
         .size(suggested.0)
         .into();
     let icon = cosmic::widget::icon(icon)
-        .style(cosmic::theme::Svg::Custom(Rc::new(|theme| {
-            cosmic::widget::svg::Appearance {
+        .class(cosmic::theme::Svg::Custom(Rc::new(|theme| {
+            cosmic::widget::svg::Style {
                 color: Some(theme.cosmic().background.on.into()),
             }
         })))
-        // .class(cosmic::theme::Svg::Custom(Rc::new(|theme| {
-        //     cosmic::widget::svg::Style {
-        //         color: Some(theme.cosmic().background.on.into()),
-        //     }
-        // })))
         .width(Length::Fixed(suggested.0 as f32))
         .height(Length::Fixed(suggested.1 as f32))
         .into();
-    let t = match core.applet.size {
-        Size::PanelSize(PanelSize::XL) => cosmic::widget::text::title2,
-        Size::PanelSize(PanelSize::L) => cosmic::widget::text::title3,
-        Size::PanelSize(PanelSize::M) => cosmic::widget::text::title4,
-        Size::PanelSize(PanelSize::S) => cosmic::widget::text::body,
-        Size::PanelSize(PanelSize::XS) => cosmic::widget::text::body,
-        Size::Hardcoded(_) => cosmic::widget::text,
-    };
-    let text = t(text.to_string()).font(cosmic::font::default());
-    cosmic::widget::button::custom(
-        cosmic::widget::container(
+    let text = core
+        .applet
+        .text(text)
+        .wrapping(cosmic::iced_core::text::Wrapping::Glyph);
+    // Column or row layout depends on panel position.
+    // TODO: handle text overflow when vertical.
+    let container = if core.applet.is_horizontal() {
+        cosmic::widget::layer_container(
             cosmic::widget::row::with_children(vec![icon, text.into()])
-                .align_items(cosmic::iced::Alignment::Center)
+                .align_y(cosmic::iced::Alignment::Center)
                 .spacing(2),
         )
-        .align_x(Horizontal::Center)
-        .align_y(Vertical::Center)
-        .height(Length::Fill),
-    )
-    // TODO: Decide what to do if vertical.
-    .height(Length::Fixed(configured_height.get() as f32))
-    .style(Button::AppletIcon)
+    } else {
+        cosmic::widget::layer_container(
+            cosmic::widget::column::with_children(vec![icon, text.into()])
+                .align_x(cosmic::iced::Alignment::Center)
+                .max_width(configured_width.get() as f32)
+                .spacing(2),
+        )
+    }
+    .align_x(Horizontal::Center.into())
+    .align_y(Vertical::Center.into());
+    cosmic::widget::button::custom(container).class(Button::AppletIcon)
 }

@@ -101,8 +101,8 @@ pub fn subscription(app: &CosmicAppletArch) -> cosmic::iced::Subscription<Messag
             }
         }
     };
-    // subscription::Subscription::run(worker)
-    cosmic::iced::subscription::channel(0, SUBSCRIPTION_BUF_SIZE, worker)
+    let stream = cosmic::iced_futures::stream::channel(SUBSCRIPTION_BUF_SIZE, worker);
+    cosmic::iced::Subscription::run_with_id("arch-updates-sub", stream)
 }
 
 #[derive(Clone, Copy, Debug)]

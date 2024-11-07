@@ -1,6 +1,6 @@
 [package]
 name = "cosmic-applet-arch"
-version = "1.0.0-beta.1"
+version = "1.0.0-beta.3"
 edition = "2021"
 license = "GPL-3.0"
 rust-version = "1.80"
@@ -18,10 +18,11 @@ ron = { version = "0.8.1", optional = true }
 
 [dependencies.libcosmic]
 git = "https://github.com/pop-os/libcosmic.git"
-# Commit pegged due to removal of autosize - expecting to see a solution upstream in cosmic time applet and then we can update.
-rev = "9e064e7"
+# To keep builds reproducible, libcosmic should be pegged to a rev.
+# This should be updated periodically.
+rev = "568ff09"
 default-features = false
-features = ["applet", "tokio", "wayland"]
+features = ["applet", "tokio", "wayland", "autosize"]
 
 [dependencies.i18n-embed]
 version = "0.14"
