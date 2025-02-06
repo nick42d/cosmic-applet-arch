@@ -1,6 +1,5 @@
 [workspace]
-members = [ "arch-news-rs",
-    "arch-updates-rs",
+members = [ "arch-updates-rs",
     "cosmic-applet-arch",
 ]
 resolver = "2"
