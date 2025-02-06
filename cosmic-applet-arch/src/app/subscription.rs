@@ -256,7 +256,9 @@ mod mock {
     }
 
     pub async fn get_mock_updates() -> arch_updates_rs::Result<Updates> {
-        let file = tokio::fs::read_to_string("mock_updates.ron").await.unwrap();
+        let file = tokio::fs::read_to_string("test/mock_updates.ron")
+            .await
+            .unwrap();
         let updates: MockUpdates = ron::from_str(&file).unwrap();
         Ok(updates.into())
     }
