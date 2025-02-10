@@ -99,7 +99,7 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
     let aur = updates.aur.len();
     let dev = updates.devel.len();
 
-    let pacman_list = collapsible_two_column_list(
+    let pacman_list = collapsible_two_column_package_list_widget(
         updates.pacman.iter().map(pretty_print_update),
         &app.pacman_list_state,
         fl!(
@@ -110,7 +110,7 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
         Message::ToggleCollapsible(crate::app::UpdateType::Pacman),
         MAX_LINES,
     );
-    let aur_list = collapsible_two_column_list(
+    let aur_list = collapsible_two_column_package_list_widget(
         updates.aur.iter().map(pretty_print_update),
         &app.aur_list_state,
         fl!(
@@ -121,7 +121,7 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
         Message::ToggleCollapsible(crate::app::UpdateType::Aur),
         MAX_LINES,
     );
-    let devel_list = collapsible_two_column_list(
+    let devel_list = collapsible_two_column_package_list_widget(
         updates.devel.iter().map(pretty_print_devel_update),
         &app.devel_list_state,
         fl!(
@@ -203,8 +203,9 @@ fn errors_row(error: impl Display) -> Element<'static, Message> {
     .into()
 }
 
-fn collapsible_two_column_list<'a>(
-    text: impl ExactSizeIterator<Item = (String, String)> + 'a,
+fn collapsible_two_column_package_list_widget<'a>(
+    // ((package name, package url), version change string)
+    package_list: impl ExactSizeIterator<Item = ((String, String), String)> + 'a,
     collapsed: &Collapsed,
     title: String,
     on_press_mesage: Message,
@@ -217,7 +218,7 @@ fn collapsible_two_column_list<'a>(
         Collapsed::Expanded => "go-up-symbolic",
     };
 
-    let list_len = text.len();
+    let list_len = package_list.len();
 
     let overflow_line = {
         if list_len > max_items {
@@ -246,15 +247,18 @@ fn collapsible_two_column_list<'a>(
     match collapsed {
         Collapsed::Collapsed => heading.into(),
         Collapsed::Expanded => {
-            let children =
-                two_column_text_widget(text.take(max_items).chain(overflow_line), space_xxs);
+            let children = two_column_package_list_widget(
+                package_list.take(max_items).chain(overflow_line),
+                space_xxs,
+            );
             cosmic::iced_widget::column![heading, children].into()
         }
     }
 }
 
 // TODO: See if I can return Widget instead of Element.
-fn two_column_text_widget<'a>(
+fn two_column_package_list_widget<'a>(
+    // ((package name, package url), version change string)
     text: impl Iterator<Item = (String, String)> + 'a,
     left_margin: u16,
 ) -> Element<'a, Message> {
@@ -275,27 +279,38 @@ fn two_column_text_widget<'a>(
     .into()
 }
 
-/// (name, upgrade)
-fn pretty_print_update(update: &Update) -> (String, String) {
-    (
-        update.pkgname.to_string(),
-        format!(
-            "{}-{}->{}-{}",
-            update.pkgver_cur, update.pkgrel_cur, update.pkgver_new, update.pkgrel_new
-        ),
-    )
+/// All the information required to display the package in the widget
+struct DisplayPackage {
+    display_ver_new: String,
+    display_ver_old: String,
+    url: String,
+    pkgname: String,
 }
 
-/// (name, upgrade)
-fn pretty_print_devel_update(update: &DevelUpdate) -> (String, String) {
-    (
-        update.pkgname.to_string(),
-        format!(
-            "{}-{}->*{}*",
-            update.pkgver_cur, update.pkgrel_cur, update.ref_id_new,
-        ),
-    )
+impl DisplayPackage {
+    fn pretty_print_version_change(&self) -> String {
+        format!("{}->{}", self.display_ver_old, self.display_ver_new)
+    }
+    fn from_update(update: &Update) -> Self {
+        Self {
+            display_ver_new: format!("{}-{}", update.pkgver_new, update.pkgrel_new),
+            display_ver_old: format!("{}-{}", update.pkgver_cur, update.pkgrel_cur),
+            url: todo!(),
+            pkgname: update.pkgname.to_string(),
+        }
+    }
+    fn from_devel_update(update: &DevelUpdate) -> Self {
+        Self {
+            display_ver_new: format!("*{}*", update.ref_id_new),
+            display_ver_old: format!("{}-{}", update.pkgver_cur, update.pkgrel_cur),
+            url: todo!(),
+            pkgname: update.pkgname.to_string(),
+        }
+    }
 }
+
+fn aur_url(pkgname: &str) -> String {}
+fn pacman_url(pkgname: &str) -> String {}
 
 // Extension of applet context icon_button_from_handle function.
 pub fn applet_button_with_text<'a, Message: 'static>(

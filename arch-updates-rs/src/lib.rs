@@ -51,6 +51,8 @@ use thiserror::Error;
 use tokio::process::Command;
 use version_compare::Version;
 
+pub mod source_repo;
+
 /// Packages ending with one of the devel suffixes will be checked against the
 /// repository, as well as just the pkgver and pkgrel.
 pub const DEVEL_SUFFIXES: [&str; 1] = ["-git"];
