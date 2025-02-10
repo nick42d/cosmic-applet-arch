@@ -259,14 +259,17 @@ fn two_column_text_widget<'a>(
     left_margin: u16,
 ) -> Element<'a, Message> {
     cosmic::widget::column::Column::with_children(text.map(|(col1, col2)| {
-        cosmic::widget::flex_row(vec![
-            cosmic::widget::container(cosmic::widget::text::body(col1))
-                .padding([0, 0, 0, left_margin])
-                .into(),
-            cosmic::widget::text::body(col2).into(),
-        ])
-        .justify_content(JustifyContent::SpaceBetween)
-        .padding(cosmic::applet::menu_control_padding())
+        cosmic::widget::button::custom(
+            cosmic::widget::flex_row(vec![
+                cosmic::widget::container(cosmic::widget::text::body(col1))
+                    .padding([0, 0, 0, left_margin])
+                    .into(),
+                cosmic::widget::text::body(col2).into(),
+            ])
+            .justify_content(JustifyContent::SpaceBetween)
+            .padding(cosmic::applet::menu_control_padding()),
+        )
+        .on_press(Message::OpenUrl("https://www.google.com".to_string()))
         .into()
     }))
     .into()
