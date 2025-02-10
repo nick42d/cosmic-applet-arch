@@ -1,12 +1,38 @@
 //! API for feature to fetch latest news from arch RSS feed.
-use cosmic::cctk::wayland_protocols::wp::input_timestamps::zv1::client::zwp_input_timestamps_manager_v1::REQ_GET_KEYBOARD_TIMESTAMPS_OPCODE;
+use std::io::BufReader;
+
 use error::*;
 use rss::Channel;
-use std::{io::BufReader, str::FromStr};
 
 /// To avoid displaying all news, we need to know when the system was last
 /// updated. Only show news later than that.
-mod latest_update {}
+mod latest_update {
+    const PACMAN_LOG_PATH: &str = "/var/log/pacman.log";
+
+    async fn get_pacman_log() -> Result<String, std::io::Error> {
+        #[cfg(feature = "mock-api")]
+        {
+            return Ok(include_str!("../test/pacman.log").to_string());
+        }
+
+        tokio::fs::read_to_string(PACMAN_LOG_PATH).await
+    }
+
+    pub async fn get_latest_update() -> Result<chrono::NaiveDateTime, std::io::Error> {
+        let log = get_pacman_log().await?;
+        let last_update_line = log
+            .lines()
+            .filter(|line| line.contains("starting full system upgrade"))
+            .last()
+            .unwrap();
+        let last_update_str = last_update_line
+            .trim_start_matches('[')
+            .split(']')
+            .next()
+            .unwrap();
+        Ok(chrono::NaiveDateTime::parse_from_str(last_update_str, "").unwrap())
+    }
+}
 
 mod error {
     #[derive(Debug)]
@@ -27,7 +53,7 @@ mod error {
     }
 }
 
-struct NewsItem<Tz>
+struct DatedNewsItem<Tz>
 where
     Tz: chrono::TimeZone,
 {
@@ -38,8 +64,8 @@ where
     date: chrono::DateTime<Tz>,
 }
 
-impl<Tz: chrono::TimeZone> NewsItem<Tz> {
-    fn from_source(item: rss::Item) -> Option<NewsItem<chrono::FixedOffset>> {
+impl DatedNewsItem<chrono::FixedOffset> {
+    fn from_source(item: rss::Item) -> Option<DatedNewsItem<chrono::FixedOffset>> {
         let rss::Item {
             title,
             link,
@@ -48,9 +74,10 @@ impl<Tz: chrono::TimeZone> NewsItem<Tz> {
             pub_date,
             ..
         } = item;
+        // Should not having a date be an error?
         let date = pub_date?;
-        let date = chrono::DateTime::parse_from_rfc2822(&date).unwrap();
-        Some(NewsItem {
+        let date = chrono::DateTime::parse_from_rfc2822(&date).ok()?;
+        Some(DatedNewsItem {
             title,
             link,
             description,
@@ -61,10 +88,15 @@ impl<Tz: chrono::TimeZone> NewsItem<Tz> {
 }
 
 async fn get_latest_arch_news(
-    last_updated_dt: std::time::SystemTime,
-) -> Result<Vec<NewsItem<chrono::FixedOffset>>, NewsError> {
+    last_updated_dt: chrono::DateTime<chrono::FixedOffset>,
+) -> Result<Vec<DatedNewsItem<chrono::FixedOffset>>, NewsError> {
     let feed = get_arch_rss_feed().await?;
-    feed.items.into_iter().filter(predicate);
+    Ok(feed
+        .items
+        .into_iter()
+        .filter_map(DatedNewsItem::from_source)
+        .filter(|item| item.date < last_updated_dt)
+        .collect())
 }
 
 async fn get_arch_rss_feed() -> Result<Channel, NewsError> {
@@ -87,7 +119,7 @@ async fn get_mock_rss_feed() -> Channel {
 mod tests {
     use super::*;
 
-    #[ignore = "Ignore by default as this uses the network"]
+    #[ignore = "Effectful test (network)"]
     #[tokio::test]
     async fn arch_rss_feed_is_ok() {
         let feed = get_arch_rss_feed().await;
@@ -98,5 +130,16 @@ mod tests {
     async fn mock_rss_feed_is_ok() {
         // May panic, that's the fail case for this test.
         get_mock_rss_feed().await;
+    }
+
+    #[tokio::test]
+    #[cfg(feature = "mock-api")]
+    async fn mock_get_latest_update() {
+        use latest_update::get_latest_update;
+
+        assert_eq!(
+            get_latest_update().await.unwrap(),
+            chrono::NaiveDateTime::UNIX_EPOCH
+        )
     }
 }
