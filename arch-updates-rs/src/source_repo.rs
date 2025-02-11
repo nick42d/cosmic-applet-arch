@@ -26,14 +26,19 @@ pub enum SourceRepo {
 async fn get_package_repo(pkgname: String) -> Result<SourceRepo> {
     Ok(SourceRepo::from_text(
         str::from_utf8(
+            // pacman -Sl lists all packages in sync db and output is like:
+            // `{repo} {pkgname} {pkgver}-{pkgrel} ?[installed]`
             tokio::process::Command::new("pacman")
-                .arg(format!("-Ss '^{}-'", pkgname))
+                .arg("-Sl")
                 .output()
                 .await?
                 .stdout
                 .as_slice(),
         )?
-        .split_once('/')
+        .lines()
+        .find(|line| line.contains(&format!(" {pkgname} ")))
+        .unwrap()
+        .split_once(' ')
         .unwrap()
         .0,
     ))
