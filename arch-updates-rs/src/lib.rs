@@ -46,12 +46,13 @@ use get_updates::{
     get_head_identifier, parse_update, parse_url, parse_ver_and_rel, PackageUrl,
 };
 use raur::Raur;
-use source_repo::{add_sources_to_updates, get_sources_list, SourceRepo, SourcesList};
+use source_repo::{add_sources_to_updates, get_sources_list, SourcesList};
 use std::{io, str::Utf8Error};
 use thiserror::Error;
 use tokio::process::Command;
 
 mod get_updates;
+pub use source_repo::SourceRepo;
 mod source_repo;
 
 /// Packages ending with one of the devel suffixes will be checked against the

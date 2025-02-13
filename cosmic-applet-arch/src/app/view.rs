@@ -1,6 +1,5 @@
 use super::{CosmicAppletArch, Message};
 use crate::fl;
-use arch_updates_rs::{DevelUpdate, Update};
 use cosmic::{
     app::Core,
     iced::{
@@ -8,10 +7,10 @@ use cosmic::{
         Length,
     },
     theme::{self, Button},
-    widget::{Id, JustifyContent, Widget},
+    widget::Id,
     Application, Element,
 };
-use std::{borrow::Cow, fmt::Display};
+use std::borrow::Cow;
 use std::{rc::Rc, sync::LazyLock};
 
 use widgets::*;
