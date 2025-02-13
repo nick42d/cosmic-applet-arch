@@ -13,7 +13,7 @@
 //!
 //! #[tokio::main]
 //! pub async fn main() {
-//!     let (Ok(pacman), Ok((aur, aur_cache)), Ok((devel, devel_cache))) = tokio::join!(
+//!     let (Ok((pacman, pacman_cache)), Ok((aur, aur_cache)), Ok((devel, devel_cache))) = tokio::join!(
 //!         check_pacman_updates_online(),
 //!         check_aur_updates_online(),
 //!         check_devel_updates_online(),
@@ -30,7 +30,7 @@
 //!         .wait()
 //!         .unwrap();
 //!     let (Ok(pacman), Ok(aur), Ok(devel)) = tokio::join!(
-//!         check_pacman_updates_offline(),
+//!         check_pacman_updates_offline(&pacman_cache),
 //!         check_aur_updates_offline(&aur_cache),
 //!         check_devel_updates_offline(&devel_cache),
 //!     ) else {
@@ -46,7 +46,7 @@ use get_updates::{
     get_head_identifier, parse_update, parse_url, parse_ver_and_rel, PackageUrl,
 };
 use raur::Raur;
-use source_repo::{get_sources_list, merge_source_info, SourceRepo, SourcesList};
+use source_repo::{add_sources_to_updates, get_sources_list, SourceRepo, SourcesList};
 use std::{io, str::Utf8Error};
 use thiserror::Error;
 use tokio::process::Command;
@@ -112,8 +112,11 @@ pub struct DevelUpdate {
     pub source_repo: SourceRepo,
 }
 
+/// Cached state for offline updates check
 pub struct PacmanUpdatesCache(SourcesList);
+/// Cached state for offline updates check
 pub struct AurUpdatesCache(Vec<Update>);
+/// Cached state for offline updates check
 pub struct DevelUpdatesCache(Vec<DevelUpdate>);
 
 /// Use the `checkupdates` function to check if any pacman-managed packages have
@@ -130,7 +133,7 @@ pub struct DevelUpdatesCache(Vec<DevelUpdate>);
 /// # async {
 /// let updates = check_pacman_updates_online().await.unwrap();
 /// // Run `sudo pacman -Syu` in the terminal
-/// let updates = check_pacman_updates_online().await.unwrap();
+/// let (updates, _) = check_pacman_updates_online().await.unwrap();
 /// assert!(updates.is_empty());
 /// # };
 pub async fn check_pacman_updates_online() -> Result<(Vec<Update>, PacmanUpdatesCache)> {
@@ -145,7 +148,7 @@ pub async fn check_pacman_updates_online() -> Result<(Vec<Update>, PacmanUpdates
             .collect::<Result<Vec<_>>>()
     };
     let (parsed_updates, source_info) = tokio::try_join!(parsed_updates, get_sources_list())?;
-    let updates = merge_source_info(parsed_updates, &source_info);
+    let updates = add_sources_to_updates(parsed_updates, &source_info);
     Ok((updates, PacmanUpdatesCache(source_info)))
 }
 
@@ -161,11 +164,11 @@ pub async fn check_pacman_updates_online() -> Result<(Vec<Update>, PacmanUpdates
 /// ```no_run
 /// # use arch_updates_rs::*;
 /// # async {
-/// let online = check_pacman_updates_online().await.unwrap();
-/// let offline = check_pacman_updates_offline().await.unwrap();
+/// let (online, cache) = check_pacman_updates_online().await.unwrap();
+/// let offline = check_pacman_updates_offline(&cache).await.unwrap();
 /// assert_eq!(online, offline);
 /// // Run `sudo pacman -Syu` in the terminal
-/// let offline = check_pacman_updates_offline().await.unwrap();
+/// let offline = check_pacman_updates_offline(&cache).await.unwrap();
 /// assert!(offline.is_empty());
 /// # };
 pub async fn check_pacman_updates_offline(cache: &PacmanUpdatesCache) -> Result<Vec<Update>> {
@@ -177,7 +180,7 @@ pub async fn check_pacman_updates_offline(cache: &PacmanUpdatesCache) -> Result<
         .lines()
         .map(parse_update)
         .collect::<Result<Vec<_>>>()?;
-    Ok(merge_source_info(parsed_updates, &cache.0))
+    Ok(add_sources_to_updates(parsed_updates, &cache.0))
 }
 
 /// Check if any packages ending in `DEVEL_SUFFIXES` have updates to their
