@@ -114,9 +114,12 @@ pub struct DevelUpdate {
 }
 
 /// Cached state for offline updates check
+#[derive(Default, Clone)]
 pub struct PacmanUpdatesCache(SourcesList);
 /// Cached state for offline updates check
+#[derive(Default, Clone)]
 pub struct AurUpdatesCache(Vec<Update>);
+#[derive(Default, Clone)]
 /// Cached state for offline updates check
 pub struct DevelUpdatesCache(Vec<DevelUpdate>);
 

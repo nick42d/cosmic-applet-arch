@@ -58,8 +58,7 @@ pub fn errors_row(error: impl Display) -> Element<'static, Message> {
 }
 
 pub fn collapsible_two_column_package_list_widget<'a>(
-    // ((package name, package url), version change string)
-    package_list: impl ExactSizeIterator<Item = ((String, String), String)> + 'a,
+    package_list: impl ExactSizeIterator<Item = DisplayPackage> + 'a,
     collapsed: &Collapsed,
     title: String,
     on_press_mesage: Message,
@@ -76,7 +75,7 @@ pub fn collapsible_two_column_package_list_widget<'a>(
 
     let overflow_line = {
         if list_len > max_items {
-            Some((fl!("n-more", n = (list_len - max_items)), "".to_string()))
+            Some(fl!("n-more", n = (list_len - max_items)))
         } else {
             None
         }
@@ -102,8 +101,9 @@ pub fn collapsible_two_column_package_list_widget<'a>(
         Collapsed::Collapsed => heading.into(),
         Collapsed::Expanded => {
             let children = two_column_package_list_widget(
-                package_list.take(max_items).chain(overflow_line),
+                package_list.take(max_items),
                 space_xxs,
+                overflow_line,
             );
             cosmic::iced_widget::column![heading, children].into()
         }
@@ -112,28 +112,38 @@ pub fn collapsible_two_column_package_list_widget<'a>(
 
 // TODO: See if I can return Widget instead of Element.
 fn two_column_package_list_widget<'a>(
-    // ((package name, package url), version change string)
-    text: impl Iterator<Item = ((String, String), String)> + 'a,
+    text: impl Iterator<Item = DisplayPackage> + 'a,
     left_margin: u16,
+    footer: Option<String>,
 ) -> Element<'a, Message> {
-    cosmic::widget::column::Column::with_children(text.map(|((col1, url), col2)| {
-        cosmic::widget::flex_row(vec![
-            cosmic::widget::container(cosmic_url_widget_body(col1, url))
+    let footer = footer.map(|footer| cosmic::widget::text::body(footer).into());
+    cosmic::widget::column::Column::with_children(
+        text.map(|pkg| {
+            cosmic::widget::flex_row(vec![
+                cosmic::widget::container(cosmic_url_widget_body(
+                    pkg.pretty_print_pkgname_and_repo(),
+                    pkg.url.clone(),
+                ))
                 .padding([0, 0, 0, left_margin])
                 .into(),
-            cosmic::widget::text::body(col2).into(),
-        ])
-        .justify_content(JustifyContent::SpaceBetween)
-        .padding(cosmic::applet::menu_control_padding())
-        .into()
-    }))
+                cosmic::widget::text::body(pkg.pretty_print_version_change()).into(),
+            ])
+            .justify_content(JustifyContent::SpaceBetween)
+            .padding(cosmic::applet::menu_control_padding())
+            .into()
+        })
+        .chain(footer),
+    )
     .into()
 }
 
-fn cosmic_url_widget_body(text: String, url: String) -> Element<'static, Message> {
-    cosmic::widget::button::custom(cosmic::widget::text::body(text))
-        .on_press(Message::OpenUrl(url))
-        .into()
+fn cosmic_url_widget_body(text: String, url: Option<String>) -> Element<'static, Message> {
+    match url {
+        Some(url) => cosmic::widget::button::link(text)
+            .on_press(Message::OpenUrl(url))
+            .into(),
+        None => cosmic::widget::text::body(text).into(),
+    }
 }
 
 /// All the information required to display the package in the widget
@@ -148,30 +158,32 @@ pub struct DisplayPackage {
 impl DisplayPackage {
     pub fn pretty_print_pkgname_and_repo(&self) -> String {
         match &self.source_repo {
-            Some(source_repo) => format!("{}/{}", source_repo, self.pkgname)
-            None => self.pkgname.to_owned()
+            Some(source_repo) => format!("{} ({})", self.pkgname, source_repo),
+            None => self.pkgname.to_owned(),
         }
     }
     pub fn pretty_print_version_change(&self) -> String {
         format!("{}->{}", self.display_ver_old, self.display_ver_new)
     }
-    fn from_update(update: &Update) -> Self {
+    pub fn from_update(update: &Update) -> Self {
         Self {
             display_ver_new: format!("{}-{}", update.pkgver_new, update.pkgrel_new),
             display_ver_old: format!("{}-{}", update.pkgver_cur, update.pkgrel_cur),
+            source_repo: update.source_repo.as_ref().map(ToString::to_string),
             url: update
                 .source_repo
+                .clone()
                 .and_then(|source_repo| package_url(&update.pkgname, source_repo)),
             pkgname: update.pkgname.to_string(),
-            source_repo: update.source_repo.map(ToString::to_string),
         }
     }
-    fn from_devel_update(update: &DevelUpdate) -> Self {
+    pub fn from_devel_update(update: &DevelUpdate) -> Self {
         Self {
             display_ver_new: format!("*{}*", update.ref_id_new),
             display_ver_old: format!("{}-{}", update.pkgver_cur, update.pkgrel_cur),
-            url: todo!(),
+            url: Some(aur_url(&update.pkgname)),
             pkgname: update.pkgname.to_string(),
+            source_repo: Some("aur".to_string()),
         }
     }
 }
@@ -190,7 +202,7 @@ fn aur_url(pkgname: &str) -> String {
 /// Get official Arch url for a package.
 fn pacman_url(pkgname: &str, source_repo_string: String) -> String {
     // NOTE: the webpage will automatically redirect a url with architecture
-    // `x86_64` to `any` if needed.
+    // `x86_64` to `any` if needed, so it's safe to hardcode x86_64 in the url for now.
     // Try this here: https://archlinux.org/packages/core/x86_64/pacman-mirrorlist/
     // TODO: add test for this.
     format!("https://archlinux.org/packages/{source_repo_string}/x86_64/{pkgname}/")

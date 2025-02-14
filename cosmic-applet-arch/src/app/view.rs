@@ -13,7 +13,7 @@ use cosmic::{
 use std::borrow::Cow;
 use std::{rc::Rc, sync::LazyLock};
 
-use widgets::*;
+pub use widgets::*;
 mod widgets;
 
 const MAX_LINES: usize = 20;
@@ -102,7 +102,7 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
     let dev = updates.devel.len();
 
     let pacman_list = collapsible_two_column_package_list_widget(
-        updates.pacman.iter().map(pretty_print_update),
+        updates.pacman.iter().map(DisplayPackage::from_update),
         &app.pacman_list_state,
         fl!(
             "updates-available",
@@ -113,7 +113,7 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
         MAX_LINES,
     );
     let aur_list = collapsible_two_column_package_list_widget(
-        updates.aur.iter().map(pretty_print_update),
+        updates.aur.iter().map(DisplayPackage::from_update),
         &app.aur_list_state,
         fl!(
             "updates-available",
@@ -124,7 +124,7 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
         MAX_LINES,
     );
     let devel_list = collapsible_two_column_package_list_widget(
-        updates.devel.iter().map(pretty_print_devel_update),
+        updates.devel.iter().map(DisplayPackage::from_devel_update),
         &app.devel_list_state,
         fl!(
             "updates-available",

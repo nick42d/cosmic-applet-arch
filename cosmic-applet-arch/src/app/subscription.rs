@@ -1,6 +1,8 @@
 use super::{CosmicAppletArch, Message, CYCLES, INTERVAL, SUBSCRIPTION_BUF_SIZE};
 use crate::app::TIMEOUT;
-use arch_updates_rs::{DevelUpdate, Update};
+use arch_updates_rs::{
+    AurUpdatesCache, DevelUpdate, DevelUpdatesCache, PacmanUpdatesCache, Update,
+};
 use chrono::{DateTime, Local};
 use cosmic::iced::futures::{channel::mpsc, SinkExt};
 use futures::TryFutureExt;
@@ -113,8 +115,9 @@ enum CheckType {
 
 #[derive(Default, Clone)]
 struct CacheState {
-    aur_cache: Vec<Update>,
-    devel_cache: Vec<DevelUpdate>,
+    pacman_cache: PacmanUpdatesCache,
+    aur_cache: AurUpdatesCache,
+    devel_cache: DevelUpdatesCache,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -147,9 +150,10 @@ async fn get_updates_offline(cache: &CacheState) -> arch_updates_rs::Result<Upda
     let CacheState {
         aur_cache,
         devel_cache,
+        pacman_cache,
     } = cache;
     let (pacman, aur, devel) = join!(
-        arch_updates_rs::check_pacman_updates_offline(),
+        arch_updates_rs::check_pacman_updates_offline(pacman_cache),
         arch_updates_rs::check_aur_updates_offline(aur_cache),
         arch_updates_rs::check_devel_updates_offline(devel_cache),
     );
@@ -166,17 +170,15 @@ async fn get_updates_online() -> arch_updates_rs::Result<(Updates, CacheState)> 
         arch_updates_rs::check_aur_updates_online(),
         arch_updates_rs::check_devel_updates_online(),
     );
+    let (pacman, pacman_cache) = pacman?;
     let (aur, aur_cache) = aur?;
     let (devel, devel_cache) = devel?;
     Ok((
-        Updates {
-            pacman: pacman?,
-            aur,
-            devel,
-        },
+        Updates { pacman, aur, devel },
         CacheState {
             aur_cache,
             devel_cache,
+            pacman_cache,
         },
     ))
 }
@@ -233,6 +235,7 @@ mod mock {
                 pkgver_cur,
                 pkgrel_cur,
                 ref_id_new,
+                source_repo: todo!(),
             }
         }
     }
@@ -251,6 +254,7 @@ mod mock {
                 pkgrel_cur,
                 pkgver_new,
                 pkgrel_new,
+                source_repo: todo!(),
             }
         }
     }
