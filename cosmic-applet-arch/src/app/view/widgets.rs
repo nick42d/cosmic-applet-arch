@@ -139,9 +139,14 @@ fn two_column_package_list_widget<'a>(
 
 fn cosmic_url_widget_body(text: String, url: Option<String>) -> Element<'static, Message> {
     match url {
-        Some(url) => cosmic::widget::button::link(text)
-            .on_press(Message::OpenUrl(url))
-            .into(),
+        Some(url) => cosmic::widget::tooltip(
+            cosmic::iced::widget::mouse_area(cosmic::widget::text::body(text))
+                .on_press(Message::OpenUrl(url.clone()))
+                .interaction(cosmic::iced::mouse::Interaction::Pointer),
+            cosmic::widget::text::body(url),
+            cosmic::widget::tooltip::Position::Bottom,
+        )
+        .into(),
         None => cosmic::widget::text::body(text).into(),
     }
 }
@@ -202,8 +207,8 @@ fn aur_url(pkgname: &str) -> String {
 /// Get official Arch url for a package.
 fn pacman_url(pkgname: &str, source_repo_string: String) -> String {
     // NOTE: the webpage will automatically redirect a url with architecture
-    // `x86_64` to `any` if needed, so it's safe to hardcode x86_64 in the url for now.
-    // Try this here: https://archlinux.org/packages/core/x86_64/pacman-mirrorlist/
+    // `x86_64` to `any` if needed, so it's safe to hardcode x86_64 in the url for
+    // now. Try this here: https://archlinux.org/packages/core/x86_64/pacman-mirrorlist/
     // TODO: add test for this.
     format!("https://archlinux.org/packages/{source_repo_string}/x86_64/{pkgname}/")
 }
