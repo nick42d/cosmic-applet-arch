@@ -6,6 +6,7 @@ use cosmic::{
         alignment::{Horizontal, Vertical},
         Length,
     },
+    iced_widget::rich_text,
     theme,
     widget::{JustifyContent, Widget},
     Element,
@@ -140,11 +141,13 @@ fn two_column_package_list_widget<'a>(
 fn cosmic_url_widget_body(text: String, url: Option<String>) -> Element<'static, Message> {
     match url {
         Some(url) => cosmic::widget::tooltip(
-            cosmic::iced::widget::mouse_area(cosmic::widget::text::body(text))
-                .on_press(Message::OpenUrl(url.clone()))
-                .interaction(cosmic::iced::mouse::Interaction::Pointer),
+            cosmic::iced::widget::mouse_area(rich_text([
+                cosmic::iced_widget::span(text).underline(true)
+            ]))
+            .on_press(Message::OpenUrl(url.clone()))
+            .interaction(cosmic::iced::mouse::Interaction::Pointer),
             cosmic::widget::text::body(url),
-            cosmic::widget::tooltip::Position::Bottom,
+            cosmic::widget::tooltip::Position::FollowCursor,
         )
         .into(),
         None => cosmic::widget::text::body(text).into(),
