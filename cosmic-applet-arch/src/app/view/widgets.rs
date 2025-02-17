@@ -117,7 +117,17 @@ fn two_column_package_list_widget<'a>(
     left_margin: u16,
     footer: Option<String>,
 ) -> Element<'a, Message> {
-    let footer = footer.map(|footer| cosmic::widget::text::body(footer).into());
+    let footer = footer.map(|footer| {
+        cosmic::widget::flex_row(vec![
+            cosmic::widget::container(cosmic::widget::text::body(footer))
+                .padding([0, 0, 0, left_margin])
+                .into(),
+            cosmic::widget::text::body("").into(),
+        ])
+        .justify_content(JustifyContent::SpaceBetween)
+        .padding(cosmic::applet::menu_control_padding())
+        .into()
+    });
     cosmic::widget::column::Column::with_children(
         text.map(|pkg| {
             cosmic::widget::flex_row(vec![
@@ -141,12 +151,16 @@ fn two_column_package_list_widget<'a>(
 fn cosmic_url_widget_body(text: String, url: Option<String>) -> Element<'static, Message> {
     match url {
         Some(url) => cosmic::widget::tooltip(
-            cosmic::iced::widget::mouse_area(rich_text([
-                cosmic::iced_widget::span(text).underline(true)
-            ]))
-            .on_press(Message::OpenUrl(url.clone()))
-            .interaction(cosmic::iced::mouse::Interaction::Pointer),
-            cosmic::widget::text::body(url),
+            // XXX: RICH TEXT PREVENTS CLICKING MOUSE AREA FOR SOME REASON.
+            cosmic::iced::widget::mouse_area(
+                // rich_text([
+                //     cosmic::iced_widget::span(text).underline(true)
+                // ]),
+                cosmic::iced_widget::text(text),
+            )
+            .interaction(cosmic::iced::mouse::Interaction::Pointer)
+            .on_press(Message::OpenUrl(url.clone())),
+            cosmic::widget::text::body(url.clone()),
             cosmic::widget::tooltip::Position::FollowCursor,
         )
         .into(),
