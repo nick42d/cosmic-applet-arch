@@ -1,25 +1,69 @@
 //! API for feature to fetch latest news from arch RSS feed.
-use std::io::BufReader;
-
+use chrono::FixedOffset;
 use error::*;
 use rss::Channel;
+use std::io::BufReader;
 
 /// To avoid displaying all news, we need to know when the system was last
 /// updated. Only show news later than that.
 mod latest_update {
-    const PACMAN_LOG_PATH: &str = "/var/log/pacman.log";
+    use anyhow::{anyhow, bail, Context};
+    use chrono::{DateTime, Local};
+    use directories::ProjectDirs;
 
+    const PACMAN_LOG_PATH: &str = "/var/log/pacman.log";
+    const LOCAL_LAST_READ_PATH: &str = "last_read";
+
+    pub async fn get_latest_update() -> anyhow::Result<DateTime<Local>> {
+        let (local_last_read, latest_pacman_update) =
+            futures::future::join(get_local_last_read(), get_latest_pacman_update()).await;
+        match (local_last_read, latest_pacman_update) {
+            (Ok(local_dt), Ok(pacman_dt)) => Ok(local_dt.max(pacman_dt)),
+            (Ok(dt), Err(e)) | (Err(e), Ok(dt)) => {
+                eprintln!("Recieved an error determining last update, but there was a fallback method that could be used {e}");
+                Ok(dt)
+            }
+            (Err(e1), Err(e2)) => bail!("Errors determining last update, {e1}, {e2}"),
+        }
+    }
+    pub async fn set_local_last_read(datetime: DateTime<Local>) -> anyhow::Result<()> {
+        let proj_dirs = ProjectDirs::from("com", "nick42d", "cosmic-applet-arch")
+            .context("Error determining local data directory")?;
+        tokio::fs::write(
+            proj_dirs
+                .data_local_dir()
+                .to_path_buf()
+                .join(LOCAL_LAST_READ_PATH),
+            datetime.to_rfc3339(),
+        )
+        .await
+        .context("Error writing last read to disk")
+    }
+    async fn get_local_last_read() -> anyhow::Result<DateTime<Local>> {
+        let proj_dirs = ProjectDirs::from("com", "nick42d", "cosmic-applet-arch")
+            .context("Error determining local data directory")?;
+        let last_read_string = tokio::fs::read_to_string(
+            proj_dirs
+                .data_local_dir()
+                .to_path_buf()
+                .join(LOCAL_LAST_READ_PATH),
+        )
+        .await
+        .context("Error reading last read file")?;
+        let date_time = DateTime::parse_from_rfc3339(&last_read_string)
+            .context("Error parsing last read file")?;
+        Ok(DateTime::<Local>::from(date_time))
+    }
     async fn get_pacman_log() -> Result<String, std::io::Error> {
         #[cfg(feature = "mock-api")]
         {
             return Ok(include_str!("../test/pacman.log").to_string());
         }
-
+        #[allow(unreachable_code)]
         tokio::fs::read_to_string(PACMAN_LOG_PATH).await
     }
-
-    pub async fn get_latest_update() -> Result<chrono::NaiveDateTime, std::io::Error> {
-        let log = get_pacman_log().await?;
+    async fn get_latest_pacman_update() -> anyhow::Result<DateTime<Local>> {
+        let log = get_pacman_log().await.context("Error reading pacman log")?;
         let last_update_line = log
             .lines()
             .filter(|line| line.contains("starting full system upgrade"))
@@ -30,7 +74,9 @@ mod latest_update {
             .split(']')
             .next()
             .unwrap();
-        Ok(chrono::NaiveDateTime::parse_from_str(last_update_str, "").unwrap())
+        let naive_datetime = DateTime::parse_from_str(last_update_str, "")
+            .context("Error parsing pacman log timestamp")?;
+        Ok(DateTime::<Local>::from(naive_datetime))
     }
 }
 
@@ -53,19 +99,16 @@ mod error {
     }
 }
 
-struct DatedNewsItem<Tz>
-where
-    Tz: chrono::TimeZone,
-{
+struct DatedNewsItem {
     title: Option<String>,
     link: Option<String>,
     description: Option<String>,
     author: Option<String>,
-    date: chrono::DateTime<Tz>,
+    date: chrono::DateTime<FixedOffset>,
 }
 
-impl DatedNewsItem<chrono::FixedOffset> {
-    fn from_source(item: rss::Item) -> Option<DatedNewsItem<chrono::FixedOffset>> {
+impl DatedNewsItem {
+    fn from_source(item: rss::Item) -> Option<DatedNewsItem> {
         let rss::Item {
             title,
             link,
@@ -89,7 +132,7 @@ impl DatedNewsItem<chrono::FixedOffset> {
 
 async fn get_latest_arch_news(
     last_updated_dt: chrono::DateTime<chrono::FixedOffset>,
-) -> Result<Vec<DatedNewsItem<chrono::FixedOffset>>, NewsError> {
+) -> Result<Vec<DatedNewsItem>, NewsError> {
     let feed = get_arch_rss_feed().await?;
     Ok(feed
         .items
@@ -108,8 +151,8 @@ async fn get_arch_rss_feed() -> Result<Channel, NewsError> {
     Ok(channel)
 }
 
-// TODO: Relegate to mock feature.
 /// May panic
+#[cfg(feature = "mock-api")]
 async fn get_mock_rss_feed() -> Channel {
     let file = tokio::fs::File::open("test/mock_feed.rss").await.unwrap();
     Channel::read_from(BufReader::new(file.into_std().await)).unwrap()
@@ -135,10 +178,10 @@ mod tests {
     #[tokio::test]
     #[cfg(feature = "mock-api")]
     async fn mock_get_latest_update() {
-        use latest_update::get_latest_update;
+        use latest_update::get_latest_pacman_update;
 
         assert_eq!(
-            get_latest_update().await.unwrap(),
+            get_latest_pacman_update().await.unwrap(),
             chrono::NaiveDateTime::UNIX_EPOCH
         )
     }

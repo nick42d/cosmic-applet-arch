@@ -22,6 +22,8 @@ reqwest = { version = "0.12.12", default-features = false, features = [
   "rustls-tls",
 ] }
 tokio-stream = { version = "0.1.17", features = ["io-util"] }
+directories = "6.0.0"
+anyhow = "1.0.96"
 
 [dependencies.libcosmic]
 git = "https://github.com/pop-os/libcosmic.git"
