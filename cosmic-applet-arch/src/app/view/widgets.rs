@@ -13,13 +13,6 @@ use cosmic::{
 };
 use std::{borrow::Cow, fmt::Display};
 
-pub fn cosmic_applet_divider(
-    spacing: u16,
-) -> impl Widget<Message, cosmic::Theme, cosmic::Renderer> + Into<Element<'static, Message>> {
-    cosmic::applet::padded_control(cosmic::widget::divider::horizontal::default())
-        .padding([0, spacing])
-}
-
 #[derive(Default)]
 pub enum Collapsed {
     #[default]
@@ -34,6 +27,13 @@ impl Collapsed {
             Collapsed::Expanded => Collapsed::Collapsed,
         }
     }
+}
+
+pub fn cosmic_applet_divider(
+    spacing: u16,
+) -> impl Widget<Message, cosmic::Theme, cosmic::Renderer> + Into<Element<'static, Message>> {
+    cosmic::applet::padded_control(cosmic::widget::divider::horizontal::default())
+        .padding([0, spacing])
 }
 
 pub fn body_text_row(text: String) -> Element<'static, Message> {
@@ -111,22 +111,17 @@ pub fn collapsible_two_column_package_list_widget<'a>(
     }
 }
 
-// TODO: See if I can return Widget instead of Element.
 fn two_column_package_list_widget<'a>(
     text: impl Iterator<Item = DisplayPackage> + 'a,
-    left_margin: u16,
+    left_margin_px: u16,
     footer: Option<String>,
 ) -> Element<'a, Message> {
+    let cosmic_padding = cosmic::applet::menu_control_padding();
+    let footer_padding = cosmic_padding.left(cosmic_padding.left + left_margin_px as f32);
     let footer = footer.map(|footer| {
-        cosmic::widget::flex_row(vec![
-            cosmic::widget::container(cosmic::widget::text::body(footer))
-                .padding([0, 0, 0, left_margin])
-                .into(),
-            cosmic::widget::text::body("").into(),
-        ])
-        .justify_content(JustifyContent::SpaceBetween)
-        .padding(cosmic::applet::menu_control_padding())
-        .into()
+        cosmic::widget::container(cosmic::widget::text::body(footer))
+            .padding(footer_padding)
+            .into()
     });
     cosmic::widget::column::Column::with_children(
         text.map(|pkg| {
@@ -135,12 +130,12 @@ fn two_column_package_list_widget<'a>(
                     pkg.pretty_print_pkgname_and_repo(),
                     pkg.url.clone(),
                 ))
-                .padding([0, 0, 0, left_margin])
+                .padding([0, 0, 0, left_margin_px])
                 .into(),
                 cosmic::widget::text::body(pkg.pretty_print_version_change()).into(),
             ])
             .justify_content(JustifyContent::SpaceBetween)
-            .padding(cosmic::applet::menu_control_padding())
+            .padding(cosmic_padding)
             .into()
         })
         .chain(footer),
@@ -148,19 +143,15 @@ fn two_column_package_list_widget<'a>(
     .into()
 }
 
+// TODO: Underline if this is a URL
+// Possibly blocked on https://github.com/iced-rs/iced/issues/2807
 fn cosmic_url_widget_body(text: String, url: Option<String>) -> Element<'static, Message> {
     match url {
         Some(url) => cosmic::widget::tooltip(
-            // XXX: RICH TEXT PREVENTS CLICKING MOUSE AREA FOR SOME REASON.
-            cosmic::iced::widget::mouse_area(
-                // rich_text([
-                //     cosmic::iced_widget::span(text).underline(true)
-                // ]),
-                cosmic::iced_widget::text(text),
-            )
-            .interaction(cosmic::iced::mouse::Interaction::Pointer)
-            .on_press(Message::OpenUrl(url.clone())),
-            cosmic::widget::text::body(url.clone()),
+            cosmic::iced::widget::mouse_area(cosmic::iced_widget::text(text))
+                .interaction(cosmic::iced::mouse::Interaction::Pointer)
+                .on_press(Message::OpenUrl(url.clone())),
+            cosmic::widget::text::body(url),
             cosmic::widget::tooltip::Position::FollowCursor,
         )
         .into(),
@@ -192,11 +183,11 @@ impl DisplayPackage {
             display_ver_new: format!("{}-{}", update.pkgver_new, update.pkgrel_new),
             display_ver_old: format!("{}-{}", update.pkgver_cur, update.pkgrel_cur),
             source_repo: update.source_repo.as_ref().map(ToString::to_string),
+            pkgname: update.pkgname.to_string(),
             url: update
                 .source_repo
                 .clone()
                 .and_then(|source_repo| package_url(&update.pkgname, source_repo)),
-            pkgname: update.pkgname.to_string(),
         }
     }
     pub fn from_devel_update(update: &DevelUpdate) -> Self {
@@ -210,6 +201,7 @@ impl DisplayPackage {
     }
 }
 
+/// Get the url for a package when given pkgname and source repo.
 fn package_url(pkgname: &str, source_repo: SourceRepo) -> Option<String> {
     match source_repo {
         SourceRepo::Aur => Some(aur_url(pkgname)),
