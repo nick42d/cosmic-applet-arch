@@ -47,6 +47,7 @@ pub enum Message {
         checked_online_time: Option<DateTime<Local>>,
     },
     CheckUpdatesErrorsMsg(String),
+    OpenUrl(String),
 }
 
 #[derive(Clone, Debug)]
@@ -111,6 +112,7 @@ impl Application for CosmicAppletArch {
             Message::ForceGetUpdates => self.handle_force_get_updates(),
             Message::ToggleCollapsible(update_type) => self.handle_toggle_collapsible(update_type),
             Message::CheckUpdatesErrorsMsg(e) => self.handle_update_error(e),
+            Message::OpenUrl(url) => self.handle_open_url(url),
         }
     }
     // Long running stream of messages to the app.
@@ -120,6 +122,12 @@ impl Application for CosmicAppletArch {
 }
 
 impl CosmicAppletArch {
+    fn handle_open_url(&self, url: String) -> Task<Message> {
+        if let Err(e) = open::that(&url) {
+            eprintln!("Error {e} opening url {url}")
+        }
+        Task::none()
+    }
     fn handle_toggle_popup(&mut self) -> Task<Message> {
         if let Some(p) = self.popup.take() {
             destroy_popup(p)

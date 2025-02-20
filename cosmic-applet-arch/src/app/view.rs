@@ -1,6 +1,5 @@
 use super::{CosmicAppletArch, Message};
 use crate::fl;
-use arch_updates_rs::{DevelUpdate, Update};
 use cosmic::{
     app::Core,
     iced::{
@@ -8,11 +7,14 @@ use cosmic::{
         Length,
     },
     theme::{self, Button},
-    widget::{Id, JustifyContent, Widget},
+    widget::Id,
     Application, Element,
 };
-use std::{borrow::Cow, fmt::Display};
+use std::borrow::Cow;
 use std::{rc::Rc, sync::LazyLock};
+
+pub use widgets::*;
+mod widgets;
 
 const MAX_LINES: usize = 20;
 
@@ -99,8 +101,11 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
     let aur = updates.aur.len();
     let dev = updates.devel.len();
 
-    let pacman_list = collapsible_two_column_list(
-        updates.pacman.iter().map(pretty_print_update),
+    let pacman_list = collapsible_two_column_package_list_widget(
+        updates
+            .pacman
+            .iter()
+            .map(DisplayPackage::from_pacman_update),
         &app.pacman_list_state,
         fl!(
             "updates-available",
@@ -110,8 +115,8 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
         Message::ToggleCollapsible(crate::app::UpdateType::Pacman),
         MAX_LINES,
     );
-    let aur_list = collapsible_two_column_list(
-        updates.aur.iter().map(pretty_print_update),
+    let aur_list = collapsible_two_column_package_list_widget(
+        updates.aur.iter().map(DisplayPackage::from_aur_update),
         &app.aur_list_state,
         fl!(
             "updates-available",
@@ -121,8 +126,8 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
         Message::ToggleCollapsible(crate::app::UpdateType::Aur),
         MAX_LINES,
     );
-    let devel_list = collapsible_two_column_list(
-        updates.devel.iter().map(pretty_print_devel_update),
+    let devel_list = collapsible_two_column_package_list_widget(
+        updates.devel.iter().map(DisplayPackage::from_devel_update),
         &app.devel_list_state,
         fl!(
             "updates-available",
@@ -156,142 +161,6 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
         )
         .push_maybe(app.error.as_ref().map(errors_row));
     app.core.applet.popup_container(content_list).into()
-}
-
-fn cosmic_applet_divider(
-    spacing: u16,
-) -> impl Widget<Message, cosmic::Theme, cosmic::Renderer> + Into<Element<'static, Message>> {
-    cosmic::applet::padded_control(cosmic::widget::divider::horizontal::default())
-        .padding([0, spacing])
-}
-
-#[derive(Default)]
-pub enum Collapsed {
-    #[default]
-    Collapsed,
-    Expanded,
-}
-
-impl Collapsed {
-    pub fn toggle(&self) -> Self {
-        match self {
-            Collapsed::Collapsed => Collapsed::Expanded,
-            Collapsed::Expanded => Collapsed::Collapsed,
-        }
-    }
-}
-
-fn body_text_row(text: String) -> Element<'static, Message> {
-    cosmic::widget::container(
-        cosmic::widget::text::body(text)
-            .width(Length::Fill)
-            .height(Length::Fixed(24.0))
-            .align_y(Vertical::Center),
-    )
-    .padding(cosmic::applet::menu_control_padding())
-    .into()
-}
-
-fn errors_row(error: impl Display) -> Element<'static, Message> {
-    cosmic::widget::container(
-        cosmic::widget::text::body(format!("Warning: {error}!!"))
-            .width(Length::Fill)
-            .height(Length::Fixed(24.0))
-            .align_y(Vertical::Center),
-    )
-    .padding(cosmic::applet::menu_control_padding())
-    .into()
-}
-
-fn collapsible_two_column_list<'a>(
-    text: impl ExactSizeIterator<Item = (String, String)> + 'a,
-    collapsed: &Collapsed,
-    title: String,
-    on_press_mesage: Message,
-    max_items: usize,
-) -> Element<'a, Message> {
-    let cosmic::cosmic_theme::Spacing { space_xxs, .. } = theme::active().cosmic().spacing;
-
-    let icon_name = match collapsed {
-        Collapsed::Collapsed => "go-down-symbolic",
-        Collapsed::Expanded => "go-up-symbolic",
-    };
-
-    let list_len = text.len();
-
-    let overflow_line = {
-        if list_len > max_items {
-            Some((fl!("n-more", n = (list_len - max_items)), "".to_string()))
-        } else {
-            None
-        }
-    };
-
-    let heading = cosmic::applet::menu_button(cosmic::iced_widget::row![
-        cosmic::widget::text::body(title)
-            .width(Length::Fill)
-            .height(Length::Fixed(24.0))
-            .align_y(Vertical::Center),
-        cosmic::widget::container(
-            cosmic::widget::icon::from_name(icon_name)
-                .size(16)
-                .symbolic(true)
-        )
-        .align_x(Horizontal::Center)
-        .align_y(Vertical::Center)
-        .width(Length::Fixed(24.0))
-        .height(Length::Fixed(24.0)),
-    ])
-    .on_press(on_press_mesage);
-    match collapsed {
-        Collapsed::Collapsed => heading.into(),
-        Collapsed::Expanded => {
-            let children =
-                two_column_text_widget(text.take(max_items).chain(overflow_line), space_xxs);
-            cosmic::iced_widget::column![heading, children].into()
-        }
-    }
-}
-
-// TODO: See if I can return Widget instead of Element.
-fn two_column_text_widget<'a>(
-    text: impl Iterator<Item = (String, String)> + 'a,
-    left_margin: u16,
-) -> Element<'a, Message> {
-    cosmic::widget::column::Column::with_children(text.map(|(col1, col2)| {
-        cosmic::widget::flex_row(vec![
-            cosmic::widget::container(cosmic::widget::text::body(col1))
-                .padding([0, 0, 0, left_margin])
-                .into(),
-            cosmic::widget::text::body(col2).into(),
-        ])
-        .justify_content(JustifyContent::SpaceBetween)
-        .padding(cosmic::applet::menu_control_padding())
-        .into()
-    }))
-    .into()
-}
-
-/// (name, upgrade)
-fn pretty_print_update(update: &Update) -> (String, String) {
-    (
-        update.pkgname.to_string(),
-        format!(
-            "{}-{}->{}-{}",
-            update.pkgver_cur, update.pkgrel_cur, update.pkgver_new, update.pkgrel_new
-        ),
-    )
-}
-
-/// (name, upgrade)
-fn pretty_print_devel_update(update: &DevelUpdate) -> (String, String) {
-    (
-        update.pkgname.to_string(),
-        format!(
-            "{}-{}->*{}*",
-            update.pkgver_cur, update.pkgrel_cur, update.ref_id_new,
-        ),
-    )
 }
 
 // Extension of applet context icon_button_from_handle function.
