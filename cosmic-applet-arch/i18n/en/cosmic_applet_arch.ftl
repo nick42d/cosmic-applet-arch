@@ -6,5 +6,4 @@ updates-available = { $numberUpdates ->
 no-updates-available = No updates available.
 loading = Loading...
 last-checked = Last checked: { $dateTime } - Click to refresh
-not-yet = Not yet
 n-more = ...and { $n } more.
