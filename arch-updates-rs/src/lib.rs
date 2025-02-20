@@ -40,7 +40,7 @@
 //! }
 //! ```
 use core::str;
-use futures::{stream::FuturesOrdered, StreamExt, TryStreamExt};
+use futures::{future::try_join, stream::FuturesOrdered, StreamExt, TryStreamExt};
 use get_updates::{
     aur_update_due, devel_update_due, get_aur_packages, get_aur_srcinfo, get_devel_packages,
     get_head_identifier, parse_update, parse_url, parse_ver_and_rel, PackageUrl,
@@ -161,7 +161,7 @@ pub async fn check_pacman_updates_online() -> Result<(Vec<PacmanUpdate>, PacmanU
             .map(parse_update)
             .collect::<Result<Vec<_>>>()
     };
-    let (parsed_updates, source_info) = tokio::try_join!(parsed_updates, get_sources_list())?;
+    let (parsed_updates, source_info) = try_join(parsed_updates, get_sources_list()).await?;
     let updates = add_sources_to_updates(parsed_updates, &source_info);
     Ok((updates, PacmanUpdatesCache(source_info)))
 }
