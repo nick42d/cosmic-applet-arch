@@ -50,6 +50,7 @@ pub enum Message {
         error_string: String,
         error_time: DateTime<Local>,
     },
+    OpenUrl(String),
 }
 
 #[derive(Clone, Debug)]
@@ -117,6 +118,7 @@ impl Application for CosmicAppletArch {
                 error_string,
                 error_time,
             } => self.handle_update_error(error_string, error_time),
+            Message::OpenUrl(url) => self.handle_open_url(url),
         }
     }
     // Long running stream of messages to the app.
@@ -126,6 +128,12 @@ impl Application for CosmicAppletArch {
 }
 
 impl CosmicAppletArch {
+    fn handle_open_url(&self, url: String) -> Task<Message> {
+        if let Err(e) = open::that(&url) {
+            eprintln!("Error {e} opening url {url}")
+        }
+        Task::none()
+    }
     fn handle_toggle_popup(&mut self) -> Task<Message> {
         if let Some(p) = self.popup.take() {
             destroy_popup(p)
