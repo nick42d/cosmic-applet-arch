@@ -1,7 +1,7 @@
 use super::{CosmicAppletArch, Message, CYCLES, INTERVAL, SUBSCRIPTION_BUF_SIZE};
 use crate::app::TIMEOUT;
 use arch_updates_rs::{
-    AurUpdatesCache, DevelUpdate, DevelUpdatesCache, PacmanUpdatesCache, Update,
+    AurUpdate, AurUpdatesCache, DevelUpdate, DevelUpdatesCache, PacmanUpdate, PacmanUpdatesCache,
 };
 use chrono::{DateTime, Local};
 use cosmic::iced::futures::{channel::mpsc, SinkExt};
@@ -122,8 +122,8 @@ struct CacheState {
 
 #[derive(Clone, Debug, Default)]
 pub struct Updates {
-    pub pacman: Vec<Update>,
-    pub aur: Vec<Update>,
+    pub pacman: Vec<PacmanUpdate>,
+    pub aur: Vec<AurUpdate>,
     pub devel: Vec<DevelUpdate>,
 }
 
@@ -188,17 +188,38 @@ async fn get_updates_online() -> arch_updates_rs::Result<(Updates, CacheState)> 
 /// the mock-api feature using the mock_updates.ron file.
 mod mock {
     use super::Updates;
-    use arch_updates_rs::{DevelUpdate, Update};
+    use arch_updates_rs::{AurUpdate, DevelUpdate, PacmanUpdate, SourceRepo};
     use serde::Deserialize;
 
+    #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+    pub enum MockSourceRepo {
+        Core,
+        Extra,
+        Multilib,
+        CoreTesting,
+        ExtraTesting,
+        MultilibTesting,
+        GnomeUnstable,
+        KdeUnstable,
+        Other(String),
+    }
     #[derive(Clone, Debug, Default, Deserialize)]
     pub struct MockUpdates {
-        pub pacman: Vec<MockUpdate>,
-        pub aur: Vec<MockUpdate>,
+        pub pacman: Vec<MockPacmanUpdate>,
+        pub aur: Vec<MockAurUpdate>,
         pub devel: Vec<MockDevelUpdate>,
     }
     #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
-    pub struct MockUpdate {
+    pub struct MockPacmanUpdate {
+        pub pkgname: String,
+        pub pkgver_cur: String,
+        pub pkgrel_cur: String,
+        pub pkgver_new: String,
+        pub pkgrel_new: String,
+        pub source_repo: Option<MockSourceRepo>,
+    }
+    #[derive(Clone, Debug, Eq, PartialEq, Deserialize)]
+    pub struct MockAurUpdate {
         pub pkgname: String,
         pub pkgver_cur: String,
         pub pkgrel_cur: String,
@@ -235,26 +256,59 @@ mod mock {
                 pkgver_cur,
                 pkgrel_cur,
                 ref_id_new,
-                source_repo: todo!(),
             }
         }
     }
-    impl From<MockUpdate> for Update {
-        fn from(value: MockUpdate) -> Update {
-            let MockUpdate {
+    impl From<MockPacmanUpdate> for PacmanUpdate {
+        fn from(value: MockPacmanUpdate) -> PacmanUpdate {
+            let MockPacmanUpdate {
+                pkgname,
+                pkgver_cur,
+                pkgrel_cur,
+                pkgver_new,
+                pkgrel_new,
+                source_repo,
+            } = value;
+            PacmanUpdate {
+                pkgname,
+                pkgver_cur,
+                pkgrel_cur,
+                pkgver_new,
+                pkgrel_new,
+                source_repo: source_repo.map(Into::into),
+            }
+        }
+    }
+    impl From<MockAurUpdate> for AurUpdate {
+        fn from(value: MockAurUpdate) -> AurUpdate {
+            let MockAurUpdate {
                 pkgname,
                 pkgver_cur,
                 pkgrel_cur,
                 pkgver_new,
                 pkgrel_new,
             } = value;
-            Update {
+            AurUpdate {
                 pkgname,
                 pkgver_cur,
                 pkgrel_cur,
                 pkgver_new,
                 pkgrel_new,
-                source_repo: todo!(),
+            }
+        }
+    }
+    impl From<MockSourceRepo> for SourceRepo {
+        fn from(value: MockSourceRepo) -> SourceRepo {
+            match value {
+                MockSourceRepo::Core => SourceRepo::Core,
+                MockSourceRepo::Extra => SourceRepo::Extra,
+                MockSourceRepo::Multilib => SourceRepo::Multilib,
+                MockSourceRepo::CoreTesting => SourceRepo::CoreTesting,
+                MockSourceRepo::ExtraTesting => SourceRepo::ExtraTesting,
+                MockSourceRepo::MultilibTesting => SourceRepo::MultilibTesting,
+                MockSourceRepo::GnomeUnstable => SourceRepo::GnomeUnstable,
+                MockSourceRepo::KdeUnstable => SourceRepo::KdeUnstable,
+                MockSourceRepo::Other(other) => SourceRepo::Other(other),
             }
         }
     }

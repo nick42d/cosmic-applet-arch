@@ -1,7 +1,7 @@
 //! Get the source repo of a package.
 
 use super::Result;
-use crate::{get_updates::ParsedUpdate, Error, Update};
+use crate::{get_updates::ParsedUpdate, Error, PacmanUpdate};
 use core::str;
 use std::{collections::HashMap, fmt::Display};
 
@@ -20,9 +20,6 @@ pub enum SourceRepo {
     MultilibTesting,
     GnomeUnstable,
     KdeUnstable,
-    /// Aur is not strictly a source repo, but if we know the package has been
-    /// isntalled from an Aur PKGBUILD, this can be a useful attribute.
-    Aur,
     /// Other comprises packages in an unofficial user repository
     /// e.g. https://wiki.archlinux.org/title/Unofficial_user_repositories or endeavouros/manjaro repositories.
     Other(String),
@@ -30,10 +27,11 @@ pub enum SourceRepo {
 
 /// When given a list of ParsedUpdates, transform them into Updates using
 /// reference data sources_list.
+/// Returns an error if ParsedUpdate is not in SourcesList.
 pub fn add_sources_to_updates(
     updates: Vec<ParsedUpdate>,
     sources_list: &SourcesList,
-) -> Vec<Update> {
+) -> Vec<PacmanUpdate> {
     updates
         .into_iter()
         .map(|update| {
@@ -44,7 +42,7 @@ pub fn add_sources_to_updates(
                 pkgver_new,
                 pkgrel_new,
             } = update;
-            Update {
+            PacmanUpdate {
                 source_repo: sources_list.get(&pkgname).map(|r| r.to_owned()),
                 pkgname,
                 pkgver_cur,
@@ -116,7 +114,6 @@ impl Display for SourceRepo {
             SourceRepo::MultilibTesting => write!(f, "multilib-testing"),
             SourceRepo::GnomeUnstable => write!(f, "gnome-unstable"),
             SourceRepo::KdeUnstable => write!(f, "kde-unstable"),
-            SourceRepo::Aur => write!(f, "aur"),
             SourceRepo::Other(s) => write!(f, "{s}"),
         }
     }
@@ -127,7 +124,7 @@ mod tests {
     use crate::{
         get_updates::ParsedUpdate,
         source_repo::{add_sources_to_updates, get_sources_list, parse_pacman_sl, SourceRepo},
-        Error, Update,
+        Error, PacmanUpdate,
     };
 
     #[tokio::test]
@@ -177,7 +174,7 @@ mod tests {
         ]
         .into();
         let expected = vec![
-            Update {
+            PacmanUpdate {
                 pkgname: "pacman".to_string(),
                 pkgver_cur: "1.0.0".to_string(),
                 pkgrel_cur: "1".to_string(),
@@ -185,7 +182,7 @@ mod tests {
                 pkgrel_new: "1".to_string(),
                 source_repo: Some(SourceRepo::Core),
             },
-            Update {
+            PacmanUpdate {
                 pkgname: "linux-aur".to_string(),
                 pkgver_cur: "6.12.1.aur1".to_string(),
                 pkgrel_cur: "1".to_string(),

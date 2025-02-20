@@ -1,17 +1,16 @@
-use super::{CosmicAppletArch, Message};
+use super::Message;
 use crate::fl;
-use arch_updates_rs::{DevelUpdate, SourceRepo, Update};
+use arch_updates_rs::{AurUpdate, DevelUpdate, PacmanUpdate, SourceRepo};
 use cosmic::{
     iced::{
         alignment::{Horizontal, Vertical},
         Length,
     },
-    iced_widget::rich_text,
     theme,
     widget::{JustifyContent, Widget},
     Element,
 };
-use std::{borrow::Cow, fmt::Display};
+use std::fmt::Display;
 
 #[derive(Default)]
 pub enum Collapsed {
@@ -178,7 +177,7 @@ impl DisplayPackage {
     pub fn pretty_print_version_change(&self) -> String {
         format!("{}->{}", self.display_ver_old, self.display_ver_new)
     }
-    pub fn from_update(update: &Update) -> Self {
+    pub fn from_pacman_update(update: &PacmanUpdate) -> Self {
         Self {
             display_ver_new: format!("{}-{}", update.pkgver_new, update.pkgrel_new),
             display_ver_old: format!("{}-{}", update.pkgver_cur, update.pkgrel_cur),
@@ -187,7 +186,16 @@ impl DisplayPackage {
             url: update
                 .source_repo
                 .clone()
-                .and_then(|source_repo| package_url(&update.pkgname, source_repo)),
+                .and_then(|source_repo| pacman_url(&update.pkgname, source_repo)),
+        }
+    }
+    pub fn from_aur_update(update: &AurUpdate) -> Self {
+        Self {
+            display_ver_new: format!("{}-{}", update.pkgver_new, update.pkgrel_new),
+            display_ver_old: format!("{}-{}", update.pkgver_cur, update.pkgrel_cur),
+            source_repo: Some("aur".to_string()),
+            pkgname: update.pkgname.to_string(),
+            url: Some(aur_url(&update.pkgname)),
         }
     }
     pub fn from_devel_update(update: &DevelUpdate) -> Self {
@@ -201,23 +209,20 @@ impl DisplayPackage {
     }
 }
 
-/// Get the url for a package when given pkgname and source repo.
-fn package_url(pkgname: &str, source_repo: SourceRepo) -> Option<String> {
-    match source_repo {
-        SourceRepo::Aur => Some(aur_url(pkgname)),
-        SourceRepo::Other(_) => None,
-        other => Some(pacman_url(pkgname, other.to_string())),
-    }
-}
 /// Get AUR url for a package.
 fn aur_url(pkgname: &str) -> String {
     format!("https://aur.archlinux.org/packages/{pkgname}")
 }
-/// Get official Arch url for a package.
-fn pacman_url(pkgname: &str, source_repo_string: String) -> String {
+/// Get official Arch url for a package, if it's in one of the official repos.
+fn pacman_url(pkgname: &str, source_repo: SourceRepo) -> Option<String> {
+    if let SourceRepo::Other(_) = source_repo {
+        return None;
+    }
     // NOTE: the webpage will automatically redirect a url with architecture
     // `x86_64` to `any` if needed, so it's safe to hardcode x86_64 in the url for
     // now. Try this here: https://archlinux.org/packages/core/x86_64/pacman-mirrorlist/
     // TODO: add test for this.
-    format!("https://archlinux.org/packages/{source_repo_string}/x86_64/{pkgname}/")
+    Some(format!(
+        "https://archlinux.org/packages/{source_repo}/x86_64/{pkgname}/"
+    ))
 }

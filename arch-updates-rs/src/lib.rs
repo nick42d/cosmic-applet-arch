@@ -88,16 +88,27 @@ pub enum Error {
     ParseErrorPkgverPkgrel(String),
 }
 
-/// Current status of an installed pacman or AUR package, vs the status of the
-/// latest version.
+/// Current status of an installed pacman package, vs the status of the latest
+/// version.
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct Update {
+pub struct PacmanUpdate {
     pub pkgname: String,
     pub pkgver_cur: String,
     pub pkgrel_cur: String,
     pub pkgver_new: String,
     pub pkgrel_new: String,
     pub source_repo: Option<SourceRepo>,
+}
+
+/// Current status of an installed AUR package, vs the status of the latest
+/// version.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AurUpdate {
+    pub pkgname: String,
+    pub pkgver_cur: String,
+    pub pkgrel_cur: String,
+    pub pkgver_new: String,
+    pub pkgrel_new: String,
 }
 
 /// Current status of an installed devel package, vs latest commit hash on the
@@ -110,7 +121,6 @@ pub struct DevelUpdate {
     /// When checking a devel update, we don't get a pkgver/pkgrel so-to-speak,
     /// we instead get the github ref.
     pub ref_id_new: String,
-    pub source_repo: SourceRepo,
 }
 
 /// Cached state for offline updates check
@@ -118,7 +128,7 @@ pub struct DevelUpdate {
 pub struct PacmanUpdatesCache(SourcesList);
 /// Cached state for offline updates check
 #[derive(Default, Clone)]
-pub struct AurUpdatesCache(Vec<Update>);
+pub struct AurUpdatesCache(Vec<AurUpdate>);
 #[derive(Default, Clone)]
 /// Cached state for offline updates check
 pub struct DevelUpdatesCache(Vec<DevelUpdate>);
@@ -140,7 +150,7 @@ pub struct DevelUpdatesCache(Vec<DevelUpdate>);
 /// let (updates, _) = check_pacman_updates_online().await.unwrap();
 /// assert!(updates.is_empty());
 /// # };
-pub async fn check_pacman_updates_online() -> Result<(Vec<Update>, PacmanUpdatesCache)> {
+pub async fn check_pacman_updates_online() -> Result<(Vec<PacmanUpdate>, PacmanUpdatesCache)> {
     let parsed_updates = async {
         let output = Command::new("checkupdates")
             .arg("--nocolor")
@@ -175,7 +185,7 @@ pub async fn check_pacman_updates_online() -> Result<(Vec<Update>, PacmanUpdates
 /// let offline = check_pacman_updates_offline(&cache).await.unwrap();
 /// assert!(offline.is_empty());
 /// # };
-pub async fn check_pacman_updates_offline(cache: &PacmanUpdatesCache) -> Result<Vec<Update>> {
+pub async fn check_pacman_updates_offline(cache: &PacmanUpdatesCache) -> Result<Vec<PacmanUpdate>> {
     let output = Command::new("checkupdates")
         .args(["--nosync", "--nocolor"])
         .output()
@@ -241,7 +251,6 @@ pub async fn check_devel_updates_online() -> Result<(Vec<DevelUpdate>, DevelUpda
                             pkgver_cur,
                             ref_id_new,
                             pkgrel_cur,
-                            source_repo: SourceRepo::Aur,
                         })
                     }
                 })
@@ -292,7 +301,6 @@ pub async fn check_devel_updates_offline(cache: &DevelUpdatesCache) -> Result<Ve
                     pkgver_cur: package.pkgver.to_owned(),
                     pkgrel_cur: package.pkgrel.to_owned(),
                     ref_id_new: cache_package.ref_id_new.to_owned(),
-                    source_repo: SourceRepo::Aur,
                 })
         })
         .filter(devel_update_due)
@@ -319,10 +327,10 @@ pub async fn check_devel_updates_offline(cache: &DevelUpdatesCache) -> Result<Ve
 /// let (updates, _) = check_aur_updates_online().await.unwrap();
 /// assert!(updates.is_empty());
 /// # };
-pub async fn check_aur_updates_online() -> Result<(Vec<Update>, AurUpdatesCache)> {
+pub async fn check_aur_updates_online() -> Result<(Vec<AurUpdate>, AurUpdatesCache)> {
     let old = get_aur_packages().await?;
     let aur = raur::Handle::new();
-    let cache: Vec<Update> = aur
+    let cache: Vec<AurUpdate> = aur
         .info(
             old.iter()
                 .map(|pkg| pkg.pkgname.to_owned())
@@ -335,13 +343,12 @@ pub async fn check_aur_updates_online() -> Result<(Vec<Update>, AurUpdatesCache)
         .filter_map(|new| {
             let matching_old = &old.iter().find(|old| old.pkgname == new.name)?.clone();
             let (pkgver_new, pkgrel_new) = parse_ver_and_rel(new.version).unwrap();
-            Some(Update {
+            Some(AurUpdate {
                 pkgname: matching_old.pkgname.to_owned(),
                 pkgver_cur: matching_old.pkgver.to_owned(),
                 pkgrel_cur: matching_old.pkgrel.to_owned(),
                 pkgver_new,
                 pkgrel_new,
-                source_repo: Some(SourceRepo::Aur),
             })
         })
         .collect();
@@ -371,7 +378,7 @@ pub async fn check_aur_updates_online() -> Result<(Vec<Update>, AurUpdatesCache)
 /// let offline = check_aur_updates_offline(&cache).await.unwrap();
 /// assert!(offline.is_empty());
 /// # };
-pub async fn check_aur_updates_offline(cache: &AurUpdatesCache) -> Result<Vec<Update>> {
+pub async fn check_aur_updates_offline(cache: &AurUpdatesCache) -> Result<Vec<AurUpdate>> {
     let old = get_aur_packages().await?;
     let updates = old
         .iter()
@@ -387,13 +394,12 @@ pub async fn check_aur_updates_offline(cache: &AurUpdatesCache) -> Result<Vec<Up
                 ),
                 None => (old_package.pkgver.to_owned(), old_package.pkgrel.to_owned()),
             };
-            Update {
+            AurUpdate {
                 pkgname: old_package.pkgname.to_owned(),
                 pkgver_cur: old_package.pkgver.to_owned(),
                 pkgrel_cur: old_package.pkgrel.to_owned(),
                 pkgver_new,
                 pkgrel_new,
-                source_repo: Some(SourceRepo::Aur),
             }
         })
         .filter(aur_update_due)

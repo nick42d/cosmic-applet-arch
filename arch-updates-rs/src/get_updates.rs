@@ -1,5 +1,5 @@
 //! get_updates functionality
-use crate::{DevelUpdate, Error, Result, Update, DEVEL_SUFFIXES};
+use crate::{AurUpdate, DevelUpdate, Error, Result, DEVEL_SUFFIXES};
 use core::str;
 use raur::Raur;
 use srcinfo::Srcinfo;
@@ -37,7 +37,7 @@ pub fn devel_update_due(update: &DevelUpdate) -> bool {
 }
 
 /// Return true if an aur package is due for an update.
-pub fn aur_update_due(package: &Update) -> bool {
+pub fn aur_update_due(package: &AurUpdate) -> bool {
     // If it's not possible to determine ordering for a package, it will be filtered
     // out. Note that this can include some VCS packages using
     // commit hashes as pkgver. That is likely acceptable behaviour

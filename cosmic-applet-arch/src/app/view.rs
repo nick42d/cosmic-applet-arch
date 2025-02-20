@@ -102,7 +102,10 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
     let dev = updates.devel.len();
 
     let pacman_list = collapsible_two_column_package_list_widget(
-        updates.pacman.iter().map(DisplayPackage::from_update),
+        updates
+            .pacman
+            .iter()
+            .map(DisplayPackage::from_pacman_update),
         &app.pacman_list_state,
         fl!(
             "updates-available",
@@ -113,7 +116,7 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
         MAX_LINES,
     );
     let aur_list = collapsible_two_column_package_list_widget(
-        updates.aur.iter().map(DisplayPackage::from_update),
+        updates.aur.iter().map(DisplayPackage::from_aur_update),
         &app.aur_list_state,
         fl!(
             "updates-available",
