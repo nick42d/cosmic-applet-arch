@@ -2,7 +2,6 @@
 use chrono::FixedOffset;
 use error::*;
 use rss::Channel;
-use std::io::BufReader;
 
 /// To avoid displaying all news, we need to know when the system was last
 /// updated. Only show news later than that.
@@ -14,9 +13,36 @@ mod latest_update {
     const PACMAN_LOG_PATH: &str = "/var/log/pacman.log";
     const LOCAL_LAST_READ_PATH: &str = "last_read";
 
-    pub async fn get_latest_update() -> anyhow::Result<DateTime<Local>> {
-        let (local_last_read, latest_pacman_update) =
-            futures::future::join(get_local_last_read(), get_latest_pacman_update()).await;
+    #[cfg_attr(test, mockall::automock)]
+    trait ArchInstallation {
+        async fn get_pacman_log(&self) -> std::io::Result<String>;
+        async fn get_local_update_timestamp_file(&self) -> std::io::Result<String>;
+    }
+
+    struct Arch;
+    impl ArchInstallation for Arch {
+        async fn get_pacman_log(&self) -> std::io::Result<String> {
+            tokio::fs::read_to_string(PACMAN_LOG_PATH).await
+        }
+        async fn get_local_update_timestamp_file(&self) -> std::io::Result<String> {
+            let proj_dirs = ProjectDirs::from("com", "nick42d", "cosmic-applet-arch").unwrap();
+            tokio::fs::read_to_string(
+                proj_dirs
+                    .data_local_dir()
+                    .to_path_buf()
+                    .join(LOCAL_LAST_READ_PATH),
+            )
+            .await
+        }
+    }
+    pub async fn get_latest_update(
+        platform: &impl ArchInstallation,
+    ) -> anyhow::Result<DateTime<Local>> {
+        let (local_last_read, latest_pacman_update) = futures::future::join(
+            get_local_last_read(platform),
+            get_latest_pacman_update(platform),
+        )
+        .await;
         match (local_last_read, latest_pacman_update) {
             (Ok(local_dt), Ok(pacman_dt)) => Ok(local_dt.max(pacman_dt)),
             (Ok(dt), Err(e)) | (Err(e), Ok(dt)) => {
@@ -39,31 +65,24 @@ mod latest_update {
         .await
         .context("Error writing last read to disk")
     }
-    async fn get_local_last_read() -> anyhow::Result<DateTime<Local>> {
-        let proj_dirs = ProjectDirs::from("com", "nick42d", "cosmic-applet-arch")
-            .context("Error determining local data directory")?;
-        let last_read_string = tokio::fs::read_to_string(
-            proj_dirs
-                .data_local_dir()
-                .to_path_buf()
-                .join(LOCAL_LAST_READ_PATH),
-        )
-        .await
-        .context("Error reading last read file")?;
+    async fn get_local_last_read(
+        platform: &impl ArchInstallation,
+    ) -> anyhow::Result<DateTime<Local>> {
+        let last_read_string = platform
+            .get_local_update_timestamp_file()
+            .await
+            .context("Error reading last read file")?;
         let date_time = DateTime::parse_from_rfc3339(&last_read_string)
             .context("Error parsing last read file")?;
         Ok(DateTime::<Local>::from(date_time))
     }
-    async fn get_pacman_log() -> Result<String, std::io::Error> {
-        #[cfg(feature = "mock-api")]
-        {
-            return Ok(include_str!("../test/pacman.log").to_string());
-        }
-        #[allow(unreachable_code)]
-        tokio::fs::read_to_string(PACMAN_LOG_PATH).await
-    }
-    async fn get_latest_pacman_update() -> anyhow::Result<DateTime<Local>> {
-        let log = get_pacman_log().await.context("Error reading pacman log")?;
+    async fn get_latest_pacman_update(
+        platform: &impl ArchInstallation,
+    ) -> anyhow::Result<DateTime<Local>> {
+        let log = platform
+            .get_pacman_log()
+            .await
+            .context("Error reading pacman log")?;
         let last_update_line = log
             .lines()
             .filter(|line| line.contains("starting full system upgrade"))
@@ -77,6 +96,33 @@ mod latest_update {
         let naive_datetime = DateTime::parse_from_str(last_update_str, "")
             .context("Error parsing pacman log timestamp")?;
         Ok(DateTime::<Local>::from(naive_datetime))
+    }
+    #[cfg(test)]
+    mod tests {
+        use crate::news::latest_update::{
+            get_latest_pacman_update, get_local_last_read, MockArchInstallation,
+        };
+
+        #[tokio::test]
+        async fn mock_get_latest_pacman_update() {
+            let mut mock = MockArchInstallation::new();
+            mock.expect_get_pacman_log()
+                .returning(|| Ok(include_str!("../test/pacman.log").to_string()));
+            assert_eq!(
+                get_latest_pacman_update(&mock).await.unwrap(),
+                chrono::DateTime::<chrono::Local>::from(chrono::DateTime::UNIX_EPOCH)
+            );
+        }
+        #[tokio::test]
+        async fn mock_get_latest_local_update() {
+            let mut mock = MockArchInstallation::new();
+            mock.expect_get_local_update_timestamp_file()
+                .returning(|| Ok("".to_string()));
+            assert_eq!(
+                get_local_last_read(&mock).await.unwrap(),
+                chrono::DateTime::<chrono::Local>::from(chrono::DateTime::UNIX_EPOCH)
+            );
+        }
     }
 }
 
@@ -99,6 +145,27 @@ mod error {
     }
 }
 
+#[cfg_attr(test, mockall::automock)]
+trait ArchNewsFeed {
+    async fn get_feed(&self) -> Result<Channel, NewsError>;
+}
+
+struct Network;
+
+const ARCH_NEWS_FEED_URL: &str = "https://archlinux.org/feeds/news/";
+
+impl ArchNewsFeed for Network {
+    async fn get_feed(&self) -> Result<Channel, NewsError> {
+        let content = reqwest::get("https://archlinux.org/feeds/news/")
+            .await?
+            .bytes()
+            .await?;
+        let channel = Channel::read_from(&content[..])?;
+        Ok(channel)
+    }
+}
+
+#[derive(PartialEq, Debug)]
 struct DatedNewsItem {
     title: Option<String>,
     link: Option<String>,
@@ -142,25 +209,16 @@ async fn get_latest_arch_news(
         .collect())
 }
 
-async fn get_arch_rss_feed() -> Result<Channel, NewsError> {
-    let content = reqwest::get("https://archlinux.org/feeds/news/")
-        .await?
-        .bytes()
-        .await?;
-    let channel = Channel::read_from(&content[..])?;
-    Ok(channel)
-}
-
-/// May panic
-#[cfg(feature = "mock-api")]
-async fn get_mock_rss_feed() -> Channel {
-    let file = tokio::fs::File::open("test/mock_feed.rss").await.unwrap();
-    Channel::read_from(BufReader::new(file.into_std().await)).unwrap()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::BufReader;
+
+    /// May panic
+    async fn get_mock_rss_feed() -> Channel {
+        let file = tokio::fs::File::open("test/mock_feed.rss").await.unwrap();
+        Channel::read_from(BufReader::new(file.into_std().await)).unwrap()
+    }
 
     #[ignore = "Effectful test (network)"]
     #[tokio::test]
@@ -170,19 +228,34 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn mock_rss_feed_is_ok() {
+    async fn mock_rss_feed_has_all_items() {
         // May panic, that's the fail case for this test.
-        get_mock_rss_feed().await;
+        let feed = get_mock_rss_feed().await;
+        let items: Vec<_> = feed
+            .items
+            .into_iter()
+            .filter_map(DatedNewsItem::from_source)
+            .collect();
+        assert!(items.len() == 10);
     }
 
     #[tokio::test]
-    #[cfg(feature = "mock-api")]
-    async fn mock_get_latest_update() {
-        use latest_update::get_latest_pacman_update;
-
-        assert_eq!(
-            get_latest_pacman_update().await.unwrap(),
-            chrono::NaiveDateTime::UNIX_EPOCH
-        )
+    async fn mock_rss_feed_has_specific_item() {
+        // May panic, that's the fail case for this test.
+        let feed = get_mock_rss_feed().await;
+        let item_one = feed
+            .items
+            .into_iter()
+            .filter_map(DatedNewsItem::from_source)
+            .next()
+            .unwrap();
+        let expected = DatedNewsItem {
+            title: None,
+            link: None,
+            description: None,
+            author: None,
+            date: chrono::DateTime::UNIX_EPOCH.into(),
+        };
+        assert_eq!(expected, item_one);
     }
 }

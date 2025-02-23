@@ -49,3 +49,6 @@ path = "../arch-updates-rs"
 [features]
 # Feature to use mock version of API instead of real version - for testing.
 mock-api = ["serde", "ron"]
+
+[dev-dependencies]
+mockall = "0.13.1"
