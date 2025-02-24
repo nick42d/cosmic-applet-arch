@@ -79,7 +79,7 @@ mod latest_update {
     async fn get_latest_pacman_update(
         platform: &impl ArchInstallation,
     ) -> anyhow::Result<DateTime<Local>> {
-        let log = platform
+        let log = &platform
             .get_pacman_log()
             .await
             .context("Error reading pacman log")?;
@@ -93,18 +93,23 @@ mod latest_update {
             .split(']')
             .next()
             .unwrap();
-        let naive_datetime = DateTime::parse_from_str(last_update_str, "")
-            .context("Error parsing pacman log timestamp")?;
+        let naive_datetime = DateTime::parse_from_str(last_update_str, "%Y-%m-%dT%H:%M:%S%z")
+            .context(format!(
+                "Error parsing pacman log timestamp '{}'",
+                last_update_str
+            ))?;
         Ok(DateTime::<Local>::from(naive_datetime))
     }
     #[cfg(test)]
     mod tests {
+        use chrono::TimeZone;
+
         use crate::news::latest_update::{
             get_latest_pacman_update, get_local_last_read, MockArchInstallation,
         };
 
         #[tokio::test]
-        async fn mock_get_latest_pacman_update() {
+        async fn test_get_latest_pacman_update_mock() {
             let mut mock = MockArchInstallation::new();
             mock.expect_get_pacman_log()
                 .returning(|| Ok(include_str!("../test/pacman.log").to_string()));
@@ -114,13 +119,15 @@ mod latest_update {
             );
         }
         #[tokio::test]
-        async fn mock_get_latest_local_update() {
+        async fn test_get_latest_local_update_mock() {
             let mut mock = MockArchInstallation::new();
             mock.expect_get_local_update_timestamp_file()
-                .returning(|| Ok("".to_string()));
+                .returning(|| Ok("03 Feb 2025 11:24:25 +0000".to_string()));
             assert_eq!(
                 get_local_last_read(&mock).await.unwrap(),
-                chrono::DateTime::<chrono::Local>::from(chrono::DateTime::UNIX_EPOCH)
+                chrono::Utc
+                    .with_ymd_and_hms(2025, 2, 3, 11, 24, 25)
+                    .unwrap()
             );
         }
     }
@@ -147,7 +154,7 @@ mod error {
 
 #[cfg_attr(test, mockall::automock)]
 trait ArchNewsFeed {
-    async fn get_feed(&self) -> Result<Channel, NewsError>;
+    async fn get_arch_news_feed(&self) -> Result<Channel, NewsError>;
 }
 
 struct Network;
@@ -155,11 +162,8 @@ struct Network;
 const ARCH_NEWS_FEED_URL: &str = "https://archlinux.org/feeds/news/";
 
 impl ArchNewsFeed for Network {
-    async fn get_feed(&self) -> Result<Channel, NewsError> {
-        let content = reqwest::get("https://archlinux.org/feeds/news/")
-            .await?
-            .bytes()
-            .await?;
+    async fn get_arch_news_feed(&self) -> Result<Channel, NewsError> {
+        let content = reqwest::get(ARCH_NEWS_FEED_URL).await?.bytes().await?;
         let channel = Channel::read_from(&content[..])?;
         Ok(channel)
     }
@@ -180,13 +184,14 @@ impl DatedNewsItem {
             title,
             link,
             description,
-            author,
             pub_date,
+            dublin_core_ext,
             ..
         } = item;
         // Should not having a date be an error?
         let date = pub_date?;
         let date = chrono::DateTime::parse_from_rfc2822(&date).ok()?;
+        let author = dublin_core_ext.map(|dc| dc.creators.into_iter().next().unwrap());
         Some(DatedNewsItem {
             title,
             link,
@@ -198,9 +203,10 @@ impl DatedNewsItem {
 }
 
 async fn get_latest_arch_news(
+    feed: &impl ArchNewsFeed,
     last_updated_dt: chrono::DateTime<chrono::FixedOffset>,
 ) -> Result<Vec<DatedNewsItem>, NewsError> {
-    let feed = get_arch_rss_feed().await?;
+    let feed = feed.get_arch_news_feed().await?;
     Ok(feed
         .items
         .into_iter()
@@ -211,26 +217,56 @@ async fn get_latest_arch_news(
 
 #[cfg(test)]
 mod tests {
+    use chrono::{DateTime, TimeZone};
+
     use super::*;
     use std::io::BufReader;
 
     /// May panic
-    async fn get_mock_rss_feed() -> Channel {
+    async fn get_mock() -> impl ArchNewsFeed {
         let file = tokio::fs::File::open("test/mock_feed.rss").await.unwrap();
-        Channel::read_from(BufReader::new(file.into_std().await)).unwrap()
+        let feed = Channel::read_from(BufReader::new(file.into_std().await)).unwrap();
+        let mut mock = MockArchNewsFeed::new();
+        mock.expect_get_arch_news_feed()
+            .return_once(move || Ok(feed));
+        mock
     }
 
     #[ignore = "Effectful test (network)"]
     #[tokio::test]
     async fn arch_rss_feed_is_ok() {
-        let feed = get_arch_rss_feed().await;
+        let platform = Network;
+        let feed = platform.get_arch_news_feed().await;
         assert!(feed.is_ok())
     }
 
     #[tokio::test]
-    async fn mock_rss_feed_has_all_items() {
+    async fn test_get_latest_news_multiple() {
+        let mock = get_mock().await;
+        let latest_news = get_latest_arch_news(&mock, chrono::Local::now().into())
+            .await
+            .unwrap();
+        assert_eq!(latest_news.len(), 3);
+    }
+    #[tokio::test]
+    async fn test_get_latest_news_one() {
+        let mock = get_mock().await;
+        let latest_news = get_latest_arch_news(&mock, chrono::Local::now().into())
+            .await
+            .unwrap();
+        let expected = DatedNewsItem {
+            title: todo!(),
+            link: todo!(),
+            description: todo!(),
+            author: todo!(),
+            date: todo!(),
+        };
+        assert_eq!(latest_news[0], expected);
+    }
+    #[tokio::test]
+    async fn test_feed_has_all_items() {
         // May panic, that's the fail case for this test.
-        let feed = get_mock_rss_feed().await;
+        let feed = get_mock().await.get_arch_news_feed().await.unwrap();
         let items: Vec<_> = feed
             .items
             .into_iter()
@@ -240,21 +276,26 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn mock_rss_feed_has_specific_item() {
+    async fn test_feed_has_specific_item() {
         // May panic, that's the fail case for this test.
-        let feed = get_mock_rss_feed().await;
+        let feed = get_mock().await.get_arch_news_feed().await.unwrap();
         let item_one = feed
             .items
             .into_iter()
             .filter_map(DatedNewsItem::from_source)
             .next()
             .unwrap();
+        let expected_dt = chrono::Utc
+            .with_ymd_and_hms(2025, 2, 3, 11, 24, 25)
+            .unwrap();
         let expected = DatedNewsItem {
-            title: None,
-            link: None,
-            description: None,
-            author: None,
-            date: chrono::DateTime::UNIX_EPOCH.into(),
+            title: Some("Glibc 2.41 corrupting Discord installation".to_string()),
+            link: Some(
+                "https://archlinux.org/news/glibc-241-corrupting-discord-installation/".to_string(),
+            ),
+            description: Some("<p>We plan to move <code>glibc</code> and its friends to stable later today, Feb 3. After installing the update, the Discord client will show a red warning that the installation is corrupt.</p>\n<p>This issue has been fixed in the Discord canary build. If you rely on audio connectivity, please use the canary build, login via browser or the flatpak version until the fix hits the stable Discord release.</p>\n<p>There have been no reports that (written) chat connectivity is affected.</p>\n<p>UPDATE: The issue has been fixed in Discord <code>0.0.84-1</code>.</p>".to_string()),
+            author: Some("Frederik Schwan".to_string()),
+            date: expected_dt.into(),
         };
         assert_eq!(expected, item_one);
     }
