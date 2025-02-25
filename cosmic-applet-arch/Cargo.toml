@@ -52,3 +52,4 @@ mock-api = ["serde", "ron"]
 
 [dev-dependencies]
 mockall = "0.13.1"
+tempfile = "3.17.1"
