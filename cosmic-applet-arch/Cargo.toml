@@ -3,7 +3,7 @@ name = "cosmic-applet-arch"
 version = "1.0.0-beta.6"
 edition = "2021"
 license = "GPL-3.0"
-rust-version = "1.84"
+rust-version = "1.85"
 
 [dependencies]
 chrono = "0.4.39"

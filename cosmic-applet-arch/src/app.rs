@@ -9,7 +9,7 @@ use std::time::Duration;
 use subscription::Updates;
 use view::Collapsed;
 
-use crate::news;
+use crate::news::{self, DatedNewsItem};
 
 mod subscription;
 mod view;
@@ -45,6 +45,12 @@ pub enum NewsState {
     #[default]
     Init,
     Received(Vec<news::DatedNewsItem>),
+    Clearing {
+        last_value: Vec<DatedNewsItem>,
+    },
+    ClearingError {
+        last_value: Vec<DatedNewsItem>,
+    },
     Error {
         last_value: Vec<news::DatedNewsItem>,
         error: Option<String>,

@@ -1,12 +1,10 @@
-use std::{
-    io::{Read, Write},
-    path::PathBuf,
-};
-
-use anyhow::{anyhow, bail, Context};
-use chrono::{DateTime, Local};
+use anyhow::{anyhow, Context};
+use chrono::{DateTime, FixedOffset, Local};
 use directories::ProjectDirs;
+use std::path::PathBuf;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+
+use super::WarnedResult;
 
 const PACMAN_LOG_PATH: &str = "/var/log/pacman.log";
 const LOCAL_LAST_READ_PATH: &str = "last_read";
@@ -26,7 +24,7 @@ impl ArchInstallation for Arch {
         tokio::fs::read_to_string(PACMAN_LOG_PATH).await
     }
     async fn get_local_storage_reader(&self) -> std::io::Result<Box<dyn AsyncRead + Unpin + Send>> {
-        tokio::fs::File::open(platform_local_last_read_path())
+        tokio::fs::File::open(platform_local_last_read_path()?)
             .await
             .map(to_box_reader)
     }
@@ -37,48 +35,51 @@ impl ArchInstallation for Arch {
             .create(true)
             .truncate(true)
             .write(true)
-            .open(platform_local_last_read_path())
+            .open(platform_local_last_read_path()?)
             .await
             .map(to_box_writer)
     }
 }
+
+/// Helper function
 fn to_box_reader<T: AsyncRead + Unpin + Send + 'static>(t: T) -> Box<dyn Send + AsyncRead + Unpin> {
     Box::new(t) as Box<dyn AsyncRead + Send + Unpin>
 }
+/// Helper function
 fn to_box_writer<T: AsyncWrite + Unpin + Send + 'static>(
     t: T,
 ) -> Box<dyn AsyncWrite + Unpin + Send> {
     Box::new(t) as Box<dyn AsyncWrite + Unpin + Send>
 }
 
-fn platform_local_last_read_path() -> PathBuf {
-    let proj_dirs = ProjectDirs::from("com", "nick42d", "cosmic-applet-arch").unwrap();
-    proj_dirs
+fn platform_local_last_read_path() -> std::io::Result<PathBuf> {
+    let proj_dirs = ProjectDirs::from("com", "nick42d", "cosmic-applet-arch")
+        .ok_or(std::io::ErrorKind::Other)?;
+    Ok(proj_dirs
         .data_local_dir()
         .to_path_buf()
-        .join(LOCAL_LAST_READ_PATH)
+        .join(LOCAL_LAST_READ_PATH))
 }
 
 pub async fn get_latest_update(
     platform: &impl ArchInstallation,
-) -> anyhow::Result<DateTime<Local>> {
+) -> WarnedResult<DateTime<Local>, String, anyhow::Error> {
     let (local_last_read, latest_pacman_update) = futures::future::join(
         get_local_last_read(platform),
         get_latest_pacman_update(platform),
     )
     .await;
     match (local_last_read, latest_pacman_update) {
-        (Ok(local_dt), Ok(pacman_dt)) => Ok(local_dt.max(pacman_dt)),
+        (Ok(local_dt), Ok(pacman_dt)) => WarnedResult::Ok(local_dt.max(pacman_dt)),
         (Ok(dt), Err(e)) | (Err(e), Ok(dt)) => {
-            eprintln!("Recieved an error determining last update, but there was a fallback method that could be used {e}");
-            Ok(dt)
+            WarnedResult::Warning(dt, format!("Recieved an error determining last update, but there was a fallback method that could be used {e}"))
         }
-        (Err(e1), Err(e2)) => bail!("Errors determining last update, {e1}, {e2}"),
+        (Err(e1), Err(e2)) => WarnedResult::Err(anyhow!("Errors determining last update, {e1}, {e2}"))
     }
 }
 pub async fn set_local_last_read(
     platform: &impl ArchInstallation,
-    datetime: DateTime<Local>,
+    datetime: DateTime<FixedOffset>,
 ) -> anyhow::Result<()> {
     let mut handle = platform
         .get_local_storage_writer()
@@ -113,12 +114,12 @@ async fn get_latest_pacman_update(
         .lines()
         .filter(|line| line.contains("starting full system upgrade"))
         .last()
-        .unwrap();
+        .context("Error parsing pacman log")?;
     let last_update_str = last_update_line
         .trim_start_matches('[')
         .split(']')
         .next()
-        .unwrap();
+        .context("Error parsing pacman log")?;
     let naive_datetime = DateTime::parse_from_str(last_update_str, "%Y-%m-%dT%H:%M:%S%z").context(
         format!("Error parsing pacman log timestamp '{}'", last_update_str),
     )?;
@@ -153,7 +154,7 @@ mod tests {
             .return_once(|| Ok(expected));
         assert_eq!(
             get_local_last_read(&mock).await.unwrap(),
-            chrono::FixedOffset::east_opt(8 * 60 * 60)
+            chrono::FixedOffset::west_opt(8 * 60 * 60)
                 .unwrap()
                 .with_ymd_and_hms(2025, 2, 3, 11, 24, 25)
                 .unwrap()
