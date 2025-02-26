@@ -94,29 +94,39 @@ mod tests {
         let feed = platform.get_arch_news_feed().await;
         assert!(feed.is_ok())
     }
-
+    #[tokio::test]
+    async fn test_get_latest_news_local_vs_utc() {
+        let mock = get_mock().await;
+        let latest_news = get_latest_arch_news(&mock, todo!()).await.unwrap();
+        assert_eq!(latest_news.len(), 1);
+    }
     #[tokio::test]
     async fn test_get_latest_news_multiple() {
         let mock = get_mock().await;
-        let latest_news = get_latest_arch_news(&mock, chrono::Local::now().into())
-            .await
-            .unwrap();
+        let latest_news = get_latest_arch_news(
+            &mock,
+            chrono::Utc
+                .with_ymd_and_hms(2024, 11, 20, 0, 0, 0)
+                .unwrap()
+                .into(),
+        )
+        .await
+        .unwrap();
         assert_eq!(latest_news.len(), 3);
     }
     #[tokio::test]
     async fn test_get_latest_news_one() {
         let mock = get_mock().await;
-        let latest_news = get_latest_arch_news(&mock, chrono::Local::now().into())
-            .await
-            .unwrap();
-        let expected = DatedNewsItem {
-            title: todo!(),
-            link: todo!(),
-            description: todo!(),
-            author: todo!(),
-            date: todo!(),
-        };
-        assert_eq!(latest_news[0], expected);
+        let latest_news = get_latest_arch_news(
+            &mock,
+            chrono::Utc
+                .with_ymd_and_hms(2025, 2, 2, 0, 0, 0)
+                .unwrap()
+                .into(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(latest_news.len(), 1);
     }
     #[tokio::test]
     async fn test_feed_has_all_items() {
