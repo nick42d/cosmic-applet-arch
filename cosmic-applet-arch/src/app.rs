@@ -40,7 +40,7 @@ pub struct CosmicAppletArch {
     news: NewsState,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub enum NewsState {
     #[default]
     Init,

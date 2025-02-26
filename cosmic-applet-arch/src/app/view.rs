@@ -159,7 +159,8 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
             )))
             .on_press(Message::ForceGetUpdates),
         )
-        .push_maybe(app.error.as_ref().map(errors_row));
+        .push_maybe(app.error.as_ref().map(errors_row))
+        .push(body_text_row(format!("{:?}", app.news)));
     app.core.applet.popup_container(content_list).into()
 }
 
