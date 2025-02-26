@@ -35,6 +35,7 @@ impl AppIcon {
             AppIcon::UpToDate => "emblem-default-symbolic",
             AppIcon::Loading => "emblem-synchronizing-symbolic",
             AppIcon::Error => "dialog-error-symbolic",
+            // TODO: Icon for news available: "software-update-symbolic-urgent"
         }
     }
 }
