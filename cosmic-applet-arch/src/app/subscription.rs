@@ -1,5 +1,8 @@
 use super::{CosmicAppletArch, Message, CYCLES, INTERVAL, SUBSCRIPTION_BUF_SIZE};
-use crate::app::TIMEOUT;
+use crate::{
+    app::TIMEOUT,
+    news::{self, Network},
+};
 use arch_updates_rs::{
     AurUpdate, AurUpdatesCache, DevelUpdate, DevelUpdatesCache, PacmanUpdate, PacmanUpdatesCache,
 };
@@ -36,7 +39,7 @@ pub fn subscription(app: &CosmicAppletArch) -> cosmic::iced::Subscription<Messag
         });
     }
     // TODO: Determine if INTERVAL is sufficient to prevent too many timeouts.
-    let worker = |mut tx: mpsc::Sender<Message>| async move {
+    let updates_worker = |mut tx: mpsc::Sender<Message>| async move {
         let mut counter = 0;
         // If we have no cache, that means we haven't run a succesful online check.
         // Offline checks will be skipped until we can run one.
@@ -103,7 +106,7 @@ pub fn subscription(app: &CosmicAppletArch) -> cosmic::iced::Subscription<Messag
             }
         }
     };
-    let stream = cosmic::iced_futures::stream::channel(SUBSCRIPTION_BUF_SIZE, worker);
+    let stream = cosmic::iced_futures::stream::channel(SUBSCRIPTION_BUF_SIZE, updates_worker);
     cosmic::iced::Subscription::run_with_id("arch-updates-sub", stream)
 }
 
@@ -141,6 +144,16 @@ where
         Ok(Err(e)) | Err(e) => Err(e),
         Ok(Ok(t)) => Ok(t),
     }
+}
+
+async fn get_news() -> Vec<news::DatedNewsItem> {
+    let latest_update = news::latest_update::get_latest_update(&news::latest_update::Arch)
+        .await
+        .unwrap();
+    news::get_latest_arch_news(&Network, latest_update.into())
+        .await
+        .unwrap()
+    // Notifier should also check news.
 }
 
 async fn get_updates_offline(cache: &CacheState) -> arch_updates_rs::Result<Updates> {

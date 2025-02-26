@@ -6,14 +6,14 @@ use rss::Channel;
 mod error;
 /// To avoid displaying all news, we need to know when the system was last
 /// updated. Only show news later than that.
-mod latest_update;
+pub mod latest_update;
 
 #[cfg_attr(test, mockall::automock)]
 trait ArchNewsFeed {
     async fn get_arch_news_feed(&self) -> Result<Channel, NewsError>;
 }
 
-struct Network;
+pub struct Network;
 
 const ARCH_NEWS_FEED_URL: &str = "https://archlinux.org/feeds/news/";
 
@@ -25,8 +25,8 @@ impl ArchNewsFeed for Network {
     }
 }
 
-#[derive(PartialEq, Debug)]
-struct DatedNewsItem {
+#[derive(PartialEq, Debug, Clone)]
+pub struct DatedNewsItem {
     title: Option<String>,
     link: Option<String>,
     description: Option<String>,
@@ -58,7 +58,7 @@ impl DatedNewsItem {
     }
 }
 
-async fn get_latest_arch_news(
+pub async fn get_latest_arch_news(
     feed: &impl ArchNewsFeed,
     last_updated_dt: chrono::DateTime<chrono::FixedOffset>,
 ) -> Result<Vec<DatedNewsItem>, NewsError> {
@@ -67,7 +67,7 @@ async fn get_latest_arch_news(
         .items
         .into_iter()
         .filter_map(DatedNewsItem::from_source)
-        .filter(|item| item.date < last_updated_dt)
+        .filter(|item| item.date >= last_updated_dt)
         .collect())
 }
 
@@ -97,7 +97,16 @@ mod tests {
     #[tokio::test]
     async fn test_get_latest_news_local_vs_utc() {
         let mock = get_mock().await;
-        let latest_news = get_latest_arch_news(&mock, todo!()).await.unwrap();
+        let latest_news = get_latest_arch_news(
+            &mock,
+            chrono::FixedOffset::east_opt(8 * 60 * 60)
+                .unwrap()
+                .with_ymd_and_hms(2025, 1, 16, 15, 33, 43)
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+        // Need to whiteboard an figure out why failing.
         assert_eq!(latest_news.len(), 1);
     }
     #[tokio::test]
@@ -112,7 +121,7 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(latest_news.len(), 3);
+        assert_eq!(latest_news.len(), 2);
     }
     #[tokio::test]
     async fn test_get_latest_news_one() {

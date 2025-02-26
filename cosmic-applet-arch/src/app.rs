@@ -9,6 +9,8 @@ use std::time::Duration;
 use subscription::Updates;
 use view::Collapsed;
 
+use crate::news;
+
 mod subscription;
 mod view;
 
@@ -32,8 +34,21 @@ pub struct CosmicAppletArch {
     aur_list_state: Collapsed,
     devel_list_state: Collapsed,
     refresh_pressed_notifier: Arc<tokio::sync::Notify>,
+    clear_news_pressed_notifier: Arc<tokio::sync::Notify>,
     last_checked: Option<DateTime<Local>>,
     error: Option<String>,
+    news: NewsState,
+}
+
+#[derive(Default)]
+pub enum NewsState {
+    #[default]
+    Init,
+    Received(Vec<news::DatedNewsItem>),
+    Error {
+        last_value: Vec<news::DatedNewsItem>,
+        error: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -47,6 +62,9 @@ pub enum Message {
         checked_online_time: Option<DateTime<Local>>,
     },
     CheckUpdatesErrorsMsg(String),
+    CheckNewsMsg(Vec<news::DatedNewsItem>),
+    CheckNewsErrorsMsg(String),
+    ClearNewsMsg,
     OpenUrl(String),
 }
 
@@ -113,6 +131,9 @@ impl Application for CosmicAppletArch {
             Message::ToggleCollapsible(update_type) => self.handle_toggle_collapsible(update_type),
             Message::CheckUpdatesErrorsMsg(e) => self.handle_update_error(e),
             Message::OpenUrl(url) => self.handle_open_url(url),
+            Message::CheckNewsMsg(vec) => todo!(),
+            Message::CheckNewsErrorsMsg(_) => todo!(),
+            Message::ClearNewsMsg => todo!(),
         }
     }
     // Long running stream of messages to the app.

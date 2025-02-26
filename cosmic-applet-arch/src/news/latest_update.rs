@@ -20,7 +20,7 @@ trait ArchInstallation {
         -> std::io::Result<Box<dyn AsyncWrite + Send + Unpin>>;
 }
 
-struct Arch;
+pub struct Arch;
 impl ArchInstallation for Arch {
     async fn get_pacman_log(&self) -> std::io::Result<String> {
         tokio::fs::read_to_string(PACMAN_LOG_PATH).await
@@ -42,18 +42,16 @@ impl ArchInstallation for Arch {
             .map(to_box_writer)
     }
 }
-pub fn to_box_reader<T: AsyncRead + Unpin + Send + 'static>(
-    t: T,
-) -> Box<dyn Send + AsyncRead + Unpin> {
+fn to_box_reader<T: AsyncRead + Unpin + Send + 'static>(t: T) -> Box<dyn Send + AsyncRead + Unpin> {
     Box::new(t) as Box<dyn AsyncRead + Send + Unpin>
 }
-pub fn to_box_writer<T: AsyncWrite + Unpin + Send + 'static>(
+fn to_box_writer<T: AsyncWrite + Unpin + Send + 'static>(
     t: T,
 ) -> Box<dyn AsyncWrite + Unpin + Send> {
     Box::new(t) as Box<dyn AsyncWrite + Unpin + Send>
 }
 
-pub fn platform_local_last_read_path() -> PathBuf {
+fn platform_local_last_read_path() -> PathBuf {
     let proj_dirs = ProjectDirs::from("com", "nick42d", "cosmic-applet-arch").unwrap();
     proj_dirs
         .data_local_dir()
