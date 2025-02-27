@@ -249,7 +249,7 @@ fn consume_warning<T, W: std::fmt::Display, E>(w: WarnedResult<T, W, E>) -> Resu
 async fn get_news_offline(
     _: &NewsCache,
 ) -> WarnedResult<Vec<DatedNewsItem>, String, anyhow::Error> {
-    todo!()
+    mock::get_mock_news().await
 }
 
 #[cfg(not(feature = "mock-api"))]
@@ -259,12 +259,6 @@ async fn get_news_offline(
     crate::news::get_news_offline(&cache).await
 }
 
-#[cfg(feature = "mock-api")]
-async fn get_news_online() -> WarnedResult<(Vec<DatedNewsItem>, NewsCache), String, anyhow::Error> {
-    todo!()
-}
-
-#[cfg(not(feature = "mock-api"))]
 async fn get_news_online() -> WarnedResult<(Vec<DatedNewsItem>, NewsCache), String, anyhow::Error> {
     crate::news::get_news_online().await
 }
@@ -314,12 +308,23 @@ async fn get_updates_online() -> arch_updates_rs::Result<(Updates, CacheState)> 
 
 #[cfg(feature = "mock-api")]
 /// This module provides a way to feed mock data to the app when compiled with
-/// the mock-api feature using the mock_updates.ron file.
+/// the mock-api feature using the mock_updates.ron and mock_news.ron files.
 mod mock {
+    use crate::news::{DatedNewsItem, WarnedResult};
+
     use super::Updates;
     use arch_updates_rs::{AurUpdate, DevelUpdate, PacmanUpdate, SourceRepo};
+    use chrono::FixedOffset;
     use serde::Deserialize;
 
+    #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+    pub struct MockDatedNewsItem {
+        pub title: Option<String>,
+        pub link: Option<String>,
+        pub description: Option<String>,
+        pub author: Option<String>,
+        pub date: chrono::DateTime<FixedOffset>,
+    }
     #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
     pub enum MockSourceRepo {
         Core,
@@ -361,6 +366,24 @@ mod mock {
         pub pkgver_cur: String,
         pub pkgrel_cur: String,
         pub ref_id_new: String,
+    }
+    impl From<MockDatedNewsItem> for DatedNewsItem {
+        fn from(value: MockDatedNewsItem) -> Self {
+            let MockDatedNewsItem {
+                title,
+                link,
+                description,
+                author,
+                date,
+            } = value;
+            DatedNewsItem {
+                title,
+                link,
+                description,
+                author,
+                date,
+            }
+        }
     }
     impl From<MockUpdates> for Updates {
         fn from(value: MockUpdates) -> Updates {
@@ -441,12 +464,19 @@ mod mock {
             }
         }
     }
-
     pub async fn get_mock_updates() -> arch_updates_rs::Result<Updates> {
         let file = tokio::fs::read_to_string("test/mock_updates.ron")
             .await
             .unwrap();
         let updates: MockUpdates = ron::from_str(&file).unwrap();
         Ok(updates.into())
+    }
+    pub async fn get_mock_news() -> WarnedResult<Vec<DatedNewsItem>, String, anyhow::Error> {
+        let file = tokio::fs::read_to_string("test/mock_news.ron")
+            .await
+            .unwrap();
+        let mock_news: Vec<MockDatedNewsItem> = ron::from_str(&file).unwrap();
+        let news = mock_news.into_iter().map(Into::into).collect();
+        WarnedResult::Ok(news)
     }
 }
