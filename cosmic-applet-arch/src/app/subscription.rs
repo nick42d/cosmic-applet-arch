@@ -1,14 +1,13 @@
-use super::{CosmicAppletArch, Message, CYCLES, SUBSCRIPTION_BUF_SIZE, UPDATES_INTERVAL};
-use crate::{
-    app::TIMEOUT,
-    news::{self},
-};
+use super::{CosmicAppletArch, Message, CYCLES, SUBSCRIPTION_BUF_SIZE};
+use crate::app::{INTERVAL, TIMEOUT};
+use crate::news::NewsCache;
+use crate::news::{DatedNewsItem, WarnedResult};
 use arch_updates_rs::{
     AurUpdate, AurUpdatesCache, DevelUpdate, DevelUpdatesCache, PacmanUpdate, PacmanUpdatesCache,
 };
 use chrono::{DateTime, Local};
 use cosmic::iced::futures::{channel::mpsc, SinkExt};
-use futures::TryFutureExt;
+use futures::{FutureExt, TryFutureExt};
 use std::future::Future;
 use tokio::join;
 
@@ -16,7 +15,7 @@ use tokio::join;
 pub fn subscription(app: &CosmicAppletArch) -> cosmic::iced::Subscription<Message> {
     let refresh_pressed_notifier = app.refresh_pressed_notifier.clone();
     let clear_news_pressed_notifier = app.clear_news_pressed_notifier.clone();
-    async fn send_error(tx: &mut mpsc::Sender<Message>, e: impl std::fmt::Display) {
+    async fn send_update_error(tx: &mut mpsc::Sender<Message>, e: impl std::fmt::Display) {
         tx.send(Message::CheckUpdatesErrorsMsg(format!("{e}")))
             .await
             .unwrap_or_else(|e| {
@@ -39,13 +38,27 @@ pub fn subscription(app: &CosmicAppletArch) -> cosmic::iced::Subscription<Messag
             eprintln!("Error {e} sending Arch update status - maybe the applet has been dropped.")
         });
     }
+    async fn send_news(tx: &mut mpsc::Sender<Message>, news: Vec<DatedNewsItem>) {
+        tx.send(Message::CheckNewsMsg(news))
+            .await
+            .unwrap_or_else(|e| {
+                eprintln!("Error {e} sending Arch news status - maybe the applet has been dropped.")
+            });
+    }
+    async fn send_news_error(tx: &mut mpsc::Sender<Message>, e: impl std::fmt::Display) {
+        tx.send(Message::CheckNewsErrorsMsg(format!("{e}")))
+            .await
+            .unwrap_or_else(|e| {
+                eprintln!("Error {e} sending Arch news status - maybe the applet has been dropped.")
+            });
+    }
     // TODO: Determine if INTERVAL is sufficient to prevent too many timeouts.
     let updates_worker = |mut tx: mpsc::Sender<Message>| async move {
         let mut counter = 0;
         // If we have no cache, that means we haven't run a succesful online check.
         // Offline checks will be skipped until we can run one.
         let mut cache = None;
-        let mut interval = tokio::time::interval(UPDATES_INTERVAL);
+        let mut interval = tokio::time::interval(INTERVAL);
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
             let notified = refresh_pressed_notifier.notified();
@@ -64,7 +77,7 @@ pub fn subscription(app: &CosmicAppletArch) -> cosmic::iced::Subscription<Messag
                             match flat_erased_timeout(TIMEOUT, get_updates_online()).await {
                                 Err(e) => {
                                     cache = None;
-                                    send_error(&mut tx, e).await;
+                                    send_update_error(&mut tx, e).await;
                                     continue;
                                 },
                                 Ok((updates, cache_tmp)) => {
@@ -76,7 +89,7 @@ pub fn subscription(app: &CosmicAppletArch) -> cosmic::iced::Subscription<Messag
                         (CheckType::Offline, Some(cache)) => {
                             match flat_erased_timeout(TIMEOUT, get_updates_offline(cache)).await {
                                 Err(e) => {
-                                    send_error(&mut tx, e).await;
+                                    send_update_error(&mut tx, e).await;
                                     continue;
                                 },
                                 Ok(updates) => updates
@@ -100,7 +113,7 @@ pub fn subscription(app: &CosmicAppletArch) -> cosmic::iced::Subscription<Messag
                         },
                         Err(e) => {
                             cache = None;
-                            send_error(&mut tx, e).await;
+                            send_update_error(&mut tx, e).await;
                         }
                     }
                 }
@@ -112,7 +125,7 @@ pub fn subscription(app: &CosmicAppletArch) -> cosmic::iced::Subscription<Messag
         // If we have no cache, that means we haven't run a succesful online check.
         // Offline checks will be skipped until we can run one.
         let mut cache = None;
-        let mut interval = tokio::time::interval(UPDATES_INTERVAL);
+        let mut interval = tokio::time::interval(INTERVAL);
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
             let notified = clear_news_pressed_notifier.notified();
@@ -128,10 +141,10 @@ pub fn subscription(app: &CosmicAppletArch) -> cosmic::iced::Subscription<Messag
                     }
                     let updates = match (&check_type, &cache) {
                         (CheckType::Online, _) => {
-                            match flat_erased_timeout(TIMEOUT, todo!()).await {
+                            match flat_erased_timeout(TIMEOUT, get_news_online().map(consume_warning)).await {
                                 Err(e) => {
                                     cache = None;
-                                    send_error(&mut tx, e).await;
+                                    send_news_error(&mut tx, e).await;
                                     continue;
                                 },
                                 Ok((updates, cache_tmp)) => {
@@ -141,9 +154,9 @@ pub fn subscription(app: &CosmicAppletArch) -> cosmic::iced::Subscription<Messag
                             }
                         }
                         (CheckType::Offline, Some(cache)) => {
-                            match flat_erased_timeout(TIMEOUT, todo!()).await {
+                            match flat_erased_timeout(TIMEOUT, get_news_offline(cache).map(consume_warning)).await {
                                 Err(e) => {
-                                    send_error(&mut tx, e).await;
+                                    send_news_error(&mut tx, e).await;
                                     continue;
                                 },
                                 Ok(updates) => updates
@@ -155,21 +168,22 @@ pub fn subscription(app: &CosmicAppletArch) -> cosmic::iced::Subscription<Messag
                         CheckType::Online => Some(Local::now()),
                         CheckType::Offline => None,
                     };
-                    send_update(&mut tx, updates, checked_online_time).await;
+                    send_news(&mut tx, updates).await;
                 }
                 _ = notified => {
                     counter = 1;
-                    let updates = flat_erased_timeout(TIMEOUT, todo!()).await;
-                    match updates {
-                        Ok((updates, cache_tmp)) => {
-                            cache = Some(cache_tmp);
-                            send_update(&mut tx, updates, Some(Local::now())).await;
-                        },
-                        Err(e) => {
-                            cache = None;
-                            send_error(&mut tx, e).await;
-                        }
-                    }
+                    todo!();
+                    // let updates = flat_erased_timeout(TIMEOUT,todo!()).await;
+                    // match updates {
+                    //     Ok((updates, cache_tmp)) => {
+                    //         cache = Some(cache_tmp);
+                    //         send_update(&mut tx, updates, Some(Local::now())).await;
+                    //     },
+                    //     Err(e) => {
+                    //         cache = None;
+                    //         send_update_error(&mut tx, e).await;
+                    //     }
+                    // }
                 }
             }
         }
@@ -218,10 +232,49 @@ where
     }
 }
 
-async fn get_updates_offline(cache: &CacheState) -> arch_updates_rs::Result<Updates> {
-    #[cfg(feature = "mock-api")]
-    return mock::get_mock_updates().await;
+/// Turn a WarnedResult into a Result, emitting an effect if a warning existed (print to stderr).
+fn consume_warning<T, W: std::fmt::Display, E>(w: WarnedResult<T, W, E>) -> Result<T, E> {
+    match w {
+        WarnedResult::Ok(t) => Ok(t),
+        WarnedResult::Warning(t, w) => {
+            eprintln!("Warning: {w}");
+            Ok(t)
+        }
+        WarnedResult::Err(e) => Err(e),
+    }
+}
 
+#[cfg(feature = "mock-api")]
+async fn get_news_offline(
+    _: &NewsCache,
+) -> WarnedResult<Vec<DatedNewsItem>, String, anyhow::Error> {
+    todo!()
+}
+
+#[cfg(not(feature = "mock-api"))]
+async fn get_news_offline(
+    cache: &NewsCache,
+) -> WarnedResult<Vec<DatedNewsItem>, String, anyhow::Error> {
+    crate::news::get_news_offline(&cache).await
+}
+
+#[cfg(feature = "mock-api")]
+async fn get_news_online() -> WarnedResult<(Vec<DatedNewsItem>, NewsCache), String, anyhow::Error> {
+    todo!()
+}
+
+#[cfg(not(feature = "mock-api"))]
+async fn get_news_online() -> WarnedResult<(Vec<DatedNewsItem>, NewsCache), String, anyhow::Error> {
+    crate::news::get_news_online().await
+}
+
+#[cfg(feature = "mock-api")]
+async fn get_updates_offline(_: &CacheState) -> arch_updates_rs::Result<Updates> {
+    mock::get_mock_updates().await
+}
+
+#[cfg(not(feature = "mock-api"))]
+async fn get_updates_offline(cache: &CacheState) -> arch_updates_rs::Result<Updates> {
     let CacheState {
         aur_cache,
         devel_cache,

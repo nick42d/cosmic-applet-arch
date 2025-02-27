@@ -51,7 +51,7 @@ use std::{io, str::Utf8Error};
 use thiserror::Error;
 use tokio::process::Command;
 
-mod get_updates;
+pub mod get_updates;
 pub use source_repo::SourceRepo;
 mod source_repo;
 

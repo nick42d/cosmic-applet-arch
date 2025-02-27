@@ -53,7 +53,7 @@ pub enum NewsState {
     },
     Error {
         last_value: Vec<news::DatedNewsItem>,
-        error: Option<String>,
+        error: String,
     },
 }
 
@@ -137,9 +137,9 @@ impl Application for CosmicAppletArch {
             Message::ToggleCollapsible(update_type) => self.handle_toggle_collapsible(update_type),
             Message::CheckUpdatesErrorsMsg(e) => self.handle_update_error(e),
             Message::OpenUrl(url) => self.handle_open_url(url),
-            Message::CheckNewsMsg(vec) => todo!(),
-            Message::CheckNewsErrorsMsg(_) => todo!(),
-            Message::ClearNewsMsg => todo!(),
+            Message::CheckNewsMsg(news) => self.handle_check_news_msg(news),
+            Message::CheckNewsErrorsMsg(e) => self.handle_check_news_errors_msg(e),
+            Message::ClearNewsMsg => self.handle_clear_news_msg(),
         }
     }
     // Long running stream of messages to the app.
@@ -149,6 +149,44 @@ impl Application for CosmicAppletArch {
 }
 
 impl CosmicAppletArch {
+    fn handle_check_news_msg(&mut self, news: Vec<DatedNewsItem>) -> Task<Message> {
+        // TODO: Consider bouncing this task like we do in handle_updates.
+        self.news = NewsState::Received(news);
+        Task::none()
+    }
+    fn handle_check_news_errors_msg(&mut self, e: String) -> Task<Message> {
+        let old_news = std::mem::take(&mut self.news);
+        self.news = match old_news {
+            NewsState::Init => NewsState::Init,
+            NewsState::Received(vec) => NewsState::Error {
+                last_value: vec,
+                error: e,
+            },
+            NewsState::Clearing { last_value } | NewsState::ClearingError { last_value } => {
+                NewsState::Error {
+                    last_value,
+                    error: e,
+                }
+            }
+            NewsState::Error { last_value, .. } => NewsState::Error {
+                last_value,
+                error: e,
+            },
+        };
+        Task::none()
+    }
+    fn handle_clear_news_msg(&mut self) -> Task<Message> {
+        let old_news = std::mem::take(&mut self.news);
+        self.news = match old_news {
+            NewsState::Init => NewsState::Init,
+            NewsState::Received(vec) => NewsState::Clearing { last_value: vec },
+            NewsState::Clearing { last_value } => NewsState::Clearing { last_value },
+            NewsState::ClearingError { last_value } => NewsState::Clearing { last_value },
+            NewsState::Error { last_value, error } => NewsState::Clearing { last_value },
+        };
+        self.clear_news_pressed_notifier.notify_one();
+        Task::none()
+    }
     fn handle_open_url(&self, url: String) -> Task<Message> {
         if let Err(e) = open::that(&url) {
             eprintln!("Error {e} opening url {url}")
