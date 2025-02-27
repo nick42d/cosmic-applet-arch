@@ -67,10 +67,13 @@ pub enum Message {
         updates: Updates,
         checked_online_time: Option<DateTime<Local>>,
     },
-    CheckUpdatesErrorsMsg(String),
     CheckNewsMsg(Vec<news::DatedNewsItem>),
     CheckNewsErrorsMsg(String),
     ClearNewsMsg,
+    CheckUpdatesErrorsMsg {
+        error_string: String,
+        error_time: DateTime<Local>,
+    },
     OpenUrl(String),
 }
 
@@ -135,7 +138,10 @@ impl Application for CosmicAppletArch {
             } => self.handle_updates(updates, checked_online_time),
             Message::ForceGetUpdates => self.handle_force_get_updates(),
             Message::ToggleCollapsible(update_type) => self.handle_toggle_collapsible(update_type),
-            Message::CheckUpdatesErrorsMsg(e) => self.handle_update_error(e),
+            Message::CheckUpdatesErrorsMsg {
+                error_string,
+                error_time,
+            } => self.handle_update_error(error_string, error_time),
             Message::OpenUrl(url) => self.handle_open_url(url),
             Message::CheckNewsMsg(news) => self.handle_check_news_msg(news),
             Message::CheckNewsErrorsMsg(e) => self.handle_check_news_errors_msg(e),
@@ -237,8 +243,9 @@ impl CosmicAppletArch {
         self.refresh_pressed_notifier.notify_one();
         Task::none()
     }
-    fn handle_update_error(&mut self, error: String) -> Task<Message> {
+    fn handle_update_error(&mut self, error: String, error_time: DateTime<Local>) -> Task<Message> {
         self.error = Some(error);
+        self.last_checked = Some(error_time);
         Task::none()
     }
     fn handle_updates(&mut self, updates: Updates, time: Option<DateTime<Local>>) -> Task<Message> {

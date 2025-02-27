@@ -16,13 +16,14 @@ pub fn subscription(app: &CosmicAppletArch) -> cosmic::iced::Subscription<Messag
     let refresh_pressed_notifier = app.refresh_pressed_notifier.clone();
     let clear_news_pressed_notifier = app.clear_news_pressed_notifier.clone();
     async fn send_update_error(tx: &mut mpsc::Sender<Message>, e: impl std::fmt::Display) {
-        tx.send(Message::CheckUpdatesErrorsMsg(format!("{e}")))
-            .await
-            .unwrap_or_else(|e| {
-                eprintln!(
-                    "Error {e} sending Arch update status - maybe the applet has been dropped."
-                )
-            });
+        tx.send(Message::CheckUpdatesErrorsMsg {
+            error_string: format!("{e}"),
+            error_time: Local::now(),
+        })
+        .await
+        .unwrap_or_else(|e| {
+            eprintln!("Error {e} sending Arch update status - maybe the applet has been dropped.")
+        });
     }
     async fn send_update(
         tx: &mut mpsc::Sender<Message>,

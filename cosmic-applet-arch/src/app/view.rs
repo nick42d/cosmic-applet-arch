@@ -1,5 +1,6 @@
 use super::{CosmicAppletArch, Message};
 use crate::fl;
+use chrono::{DateTime, Local};
 use cosmic::{
     app::Core,
     iced::{
@@ -86,6 +87,12 @@ pub fn view(app: &CosmicAppletArch) -> Element<Message> {
 
 // view_window is what is displayed in the popup.
 pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Element<Message> {
+    fn last_checked_string(t: DateTime<Local>) -> String {
+        fl!(
+            "last-checked",
+            dateTime = format!("{}", t.format("%x %-I:%M %p"))
+        )
+    }
     let cosmic::cosmic_theme::Spacing {
         space_xxs, space_s, ..
     } = theme::active().cosmic().spacing;
@@ -93,8 +100,21 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
         .spacing(space_xxs)
         .padding([space_xxs, 0]);
 
+    let last_checked_row = app.last_checked.map(|t| {
+        cosmic::applet::menu_button(cosmic::widget::text::body(last_checked_string(t)))
+            .on_press(Message::ForceGetUpdates)
+    });
+    let loading_row = match app.last_checked {
+        Some(_) => None,
+        None => Some(body_text_row(fl!("loading"))),
+    };
+    let errors_row = app.error.as_ref().map(errors_row);
+
     let Some(updates) = app.updates.as_ref() else {
-        let content_list = content_list.push(body_text_row(fl!("loading")));
+        let content_list = content_list
+            .push_maybe(last_checked_row)
+            .push_maybe(loading_row)
+            .push_maybe(errors_row);
         return app.core.applet.popup_container(content_list).into();
     };
 
@@ -139,11 +159,6 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
         MAX_LINES,
     );
 
-    let last_checked = match app.last_checked {
-        Some(t) => format!("{}", t.format("%x %-I:%M %p")),
-        None => fl!("not-yet"),
-    };
-
     let total_updates = pm + aur + dev;
     let content_list = content_list
         .push_maybe((pm > 0).then_some(pacman_list))
@@ -153,14 +168,9 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
         .push_maybe((dev > 0).then_some(devel_list))
         .push_maybe((total_updates == 0).then_some(body_text_row(fl!("no-updates-available"))))
         .push(cosmic_applet_divider(space_s).into())
-        .push(
-            cosmic::applet::menu_button(cosmic::widget::text::body(fl!(
-                "last-checked",
-                dateTime = last_checked
-            )))
-            .on_press(Message::ForceGetUpdates),
-        )
-        .push_maybe(app.error.as_ref().map(errors_row))
+        .push_maybe(last_checked_row)
+        .push_maybe(loading_row)
+        .push_maybe(errors_row)
         .push(body_text_row(format!("{:?}", app.news)));
     app.core.applet.popup_container(content_list).into()
 }
