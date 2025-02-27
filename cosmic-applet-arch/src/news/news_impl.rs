@@ -6,7 +6,7 @@ use rss::Channel;
 const ARCH_NEWS_FEED_URL: &str = "https://archlinux.org/feeds/news/";
 
 #[cfg_attr(test, mockall::automock)]
-trait ArchNewsFeed {
+pub trait ArchNewsFeed {
     async fn get_arch_news_feed(&self) -> Result<Channel>;
 }
 
@@ -140,11 +140,12 @@ mod tests {
     async fn test_feed_has_all_items() {
         // May panic, that's the fail case for this test.
         let feed = get_mock().await.get_arch_news_feed().await.unwrap();
-        let items: Vec<_> = feed
+        let items = feed
             .items
             .into_iter()
             .map(DatedNewsItem::from_source)
-            .collect();
+            .collect::<Result<Vec<_>>>()
+            .unwrap();
         assert!(items.len() == 10);
     }
 
