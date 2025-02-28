@@ -1,6 +1,6 @@
 MockUpdates(
     pacman: [
-        MockUpdate(
+        MockPacmanUpdate(
             pkgname: "test",
             pkgver_cur: "1.2.3",
             pkgrel_cur: "1",

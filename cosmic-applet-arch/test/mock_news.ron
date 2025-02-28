@@ -4,7 +4,7 @@
         link: Some("https://archlinux.org/news/glibc-241-corrupting-discord-installation/"),
         description: Some("<p>We plan to move <code>glibc</code> and its friends to stable later today, Feb 3. After installing the update, the Discord client will show a red warning that the installation is corrupt.</p>\n<p>This issue has been fixed in the Discord canary build. If you rely on audio connectivity, please use the canary build, login via browser or the flatpak version until the fix hits the stable Discord release.</p>\n<p>There have been no reports that (written) chat connectivity is affected.</p>\n<p>UPDATE: The issue has been fixed in Discord <code>0.0.84-1</code>.</p>"),
         author: Some("Frederik Schwan"),
-        date: "2025-02-03T11:24:25Z",
+        date: "2025-03-03T11:24:25Z",
     ),
     (
         title: Some("Critical rsync security release 3.4.0"),

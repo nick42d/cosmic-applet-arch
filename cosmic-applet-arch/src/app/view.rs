@@ -171,7 +171,9 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
         .push_maybe(last_checked_row)
         .push_maybe(loading_row)
         .push_maybe(errors_row)
-        .push(body_text_row(format!("{:?}", app.news)));
+        .push(body_text_row(
+            format!("{:?}", app.news).get(0..20).unwrap().to_string(),
+        ));
     app.core.applet.popup_container(content_list).into()
 }
 
