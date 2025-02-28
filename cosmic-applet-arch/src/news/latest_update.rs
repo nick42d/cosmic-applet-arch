@@ -71,9 +71,11 @@ pub async fn get_latest_update(
     .await;
     match (local_last_read, latest_pacman_update) {
         (Ok(local_dt), Ok(pacman_dt)) => WarnedResult::Ok(local_dt.max(pacman_dt)),
-        (Ok(dt), Err(e)) | (Err(e), Ok(dt)) => {
-            WarnedResult::Warning(dt, format!("Recieved an error determining last update, but there was a fallback method that could be used {e}"))
-        }
+        (Ok(local_dt), Err(e)) => {
+            WarnedResult::Warning(local_dt, format!("Recieved an error determining last update, but there was a fallback method that could be used {e}"))
+        },
+        // In this case, we've got a pacman dt but no local dt. This is normal enough not to need to warn.
+        (Err(e), Ok(pacman_dt)) => WarnedResult::Ok(pacman_dt),
         (Err(e1), Err(e2)) => WarnedResult::Err(anyhow!("Errors determining last update, {e1}, {e2}"))
     }
 }
@@ -138,6 +140,19 @@ mod tests {
         let mut mock = MockArchInstallation::new();
         mock.expect_get_pacman_log()
             .returning(|| Ok(include_str!("../../test/pacman.log").to_string()));
+        assert_eq!(
+            get_latest_pacman_update(&mock).await.unwrap(),
+            chrono::FixedOffset::east_opt(8 * 60 * 60)
+                .unwrap()
+                .with_ymd_and_hms(2024, 2, 5, 22, 2, 13)
+                .unwrap()
+        );
+    }
+    #[tokio::test]
+    async fn test_pacman_log_with_no_update_shouldnt_error() {
+        let mut mock = MockArchInstallation::new();
+        mock.expect_get_pacman_log()
+            .returning(|| Ok(include_str!("../../test/pacman-no-update.log").to_string()));
         assert_eq!(
             get_latest_pacman_update(&mock).await.unwrap(),
             chrono::FixedOffset::east_opt(8 * 60 * 60)
