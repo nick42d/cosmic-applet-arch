@@ -132,7 +132,7 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
             numberUpdates = pm,
             updateSource = "pacman"
         ),
-        Message::ToggleCollapsible(crate::app::UpdateType::Pacman),
+        Message::ToggleCollapsible(crate::app::CollapsibleType::PacmanUpdates),
         MAX_LINES,
     );
     let aur_list = updates_available_widget(
@@ -143,7 +143,7 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
             numberUpdates = aur,
             updateSource = "AUR"
         ),
-        Message::ToggleCollapsible(crate::app::UpdateType::Aur),
+        Message::ToggleCollapsible(crate::app::CollapsibleType::AurUpdates),
         MAX_LINES,
     );
     let devel_list = updates_available_widget(
@@ -154,7 +154,7 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
             numberUpdates = dev,
             updateSource = "devel"
         ),
-        Message::ToggleCollapsible(crate::app::UpdateType::Devel),
+        Message::ToggleCollapsible(crate::app::CollapsibleType::DevelUpdates),
         MAX_LINES,
     );
     let news_row = match &app.news {
@@ -162,8 +162,8 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
         crate::app::NewsState::Received(vec) => Some(news_available_widget(
             vec.iter(),
             &app.news_list_state,
-            "TODO".into(),
-            Message::TogglePopup,
+            format!("TODO {}", vec.len()),
+            Message::ToggleCollapsible(crate::app::CollapsibleType::News),
             MAX_LINES,
         )),
         crate::app::NewsState::Clearing { last_value } => todo!(),

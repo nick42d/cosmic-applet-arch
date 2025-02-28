@@ -62,7 +62,7 @@ pub enum NewsState {
 pub enum Message {
     ForceGetUpdates,
     TogglePopup,
-    ToggleCollapsible(UpdateType),
+    ToggleCollapsible(CollapsibleType),
     PopupClosed(Id),
     CheckUpdatesMsg {
         updates: Updates,
@@ -79,10 +79,11 @@ pub enum Message {
 }
 
 #[derive(Clone, Debug)]
-pub enum UpdateType {
-    Aur,
-    Pacman,
-    Devel,
+pub enum CollapsibleType {
+    AurUpdates,
+    PacmanUpdates,
+    DevelUpdates,
+    News,
 }
 
 impl Application for CosmicAppletArch {
@@ -226,11 +227,14 @@ impl CosmicAppletArch {
             get_popup(popup_settings)
         }
     }
-    fn handle_toggle_collapsible(&mut self, update_type: UpdateType) -> Task<Message> {
+    fn handle_toggle_collapsible(&mut self, update_type: CollapsibleType) -> Task<Message> {
         match update_type {
-            UpdateType::Aur => self.aur_list_state = self.aur_list_state.toggle(),
-            UpdateType::Pacman => self.pacman_list_state = self.pacman_list_state.toggle(),
-            UpdateType::Devel => self.devel_list_state = self.devel_list_state.toggle(),
+            CollapsibleType::AurUpdates => self.aur_list_state = self.aur_list_state.toggle(),
+            CollapsibleType::PacmanUpdates => {
+                self.pacman_list_state = self.pacman_list_state.toggle()
+            }
+            CollapsibleType::DevelUpdates => self.devel_list_state = self.devel_list_state.toggle(),
+            CollapsibleType::News => self.news_list_state = self.news_list_state.toggle(),
         }
         Task::none()
     }
