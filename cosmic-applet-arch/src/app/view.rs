@@ -36,7 +36,6 @@ impl AppIcon {
             AppIcon::UpToDate => "emblem-default-symbolic",
             AppIcon::Loading => "emblem-synchronizing-symbolic",
             AppIcon::Error => "dialog-error-symbolic",
-            // TODO: Icon for news available: "software-update-symbolic-urgent"
         }
     }
 }
@@ -122,7 +121,7 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
     let aur = updates.aur.len();
     let dev = updates.devel.len();
 
-    let pacman_list = collapsible_two_column_package_list_widget(
+    let pacman_list = updates_available_widget(
         updates
             .pacman
             .iter()
@@ -136,7 +135,7 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
         Message::ToggleCollapsible(crate::app::UpdateType::Pacman),
         MAX_LINES,
     );
-    let aur_list = collapsible_two_column_package_list_widget(
+    let aur_list = updates_available_widget(
         updates.aur.iter().map(DisplayPackage::from_aur_update),
         &app.aur_list_state,
         fl!(
@@ -147,7 +146,7 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
         Message::ToggleCollapsible(crate::app::UpdateType::Aur),
         MAX_LINES,
     );
-    let devel_list = collapsible_two_column_package_list_widget(
+    let devel_list = updates_available_widget(
         updates.devel.iter().map(DisplayPackage::from_devel_update),
         &app.devel_list_state,
         fl!(
@@ -158,6 +157,19 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
         Message::ToggleCollapsible(crate::app::UpdateType::Devel),
         MAX_LINES,
     );
+    let news_row = match &app.news {
+        crate::app::NewsState::Init => None,
+        crate::app::NewsState::Received(vec) => Some(news_available_widget(
+            vec.iter(),
+            &app.news_list_state,
+            "TODO".into(),
+            Message::TogglePopup,
+            MAX_LINES,
+        )),
+        crate::app::NewsState::Clearing { last_value } => todo!(),
+        crate::app::NewsState::ClearingError { last_value } => todo!(),
+        crate::app::NewsState::Error { last_value, error } => todo!(),
+    };
 
     let total_updates = pm + aur + dev;
     let content_list = content_list
@@ -171,9 +183,7 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
         .push_maybe(last_checked_row)
         .push_maybe(loading_row)
         .push_maybe(errors_row)
-        .push(body_text_row(
-            format!("{:?}", app.news).get(0..20).unwrap().to_string(),
-        ));
+        .push_maybe(news_row);
     app.core.applet.popup_container(content_list).into()
 }
 

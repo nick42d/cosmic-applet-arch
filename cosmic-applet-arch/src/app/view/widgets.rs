@@ -1,5 +1,5 @@
 use super::Message;
-use crate::fl;
+use crate::{fl, news::DatedNewsItem};
 use arch_updates_rs::{AurUpdate, DevelUpdate, PacmanUpdate, SourceRepo};
 use cosmic::{
     iced::{
@@ -57,28 +57,15 @@ pub fn errors_row(error: impl Display) -> Element<'static, Message> {
     .into()
 }
 
-pub fn collapsible_two_column_package_list_widget<'a>(
-    package_list: impl ExactSizeIterator<Item = DisplayPackage> + 'a,
+fn cosmic_collapsible_row_widget<'a>(
+    contents: Element<'a, Message>,
     collapsed: &Collapsed,
     title: String,
     on_press_mesage: Message,
-    max_items: usize,
 ) -> Element<'a, Message> {
-    let cosmic::cosmic_theme::Spacing { space_xxs, .. } = theme::active().cosmic().spacing;
-
     let icon_name = match collapsed {
         Collapsed::Collapsed => "go-down-symbolic",
         Collapsed::Expanded => "go-up-symbolic",
-    };
-
-    let list_len = package_list.len();
-
-    let overflow_line = {
-        if list_len > max_items {
-            Some(fl!("n-more", n = (list_len - max_items)))
-        } else {
-            None
-        }
     };
 
     let heading = cosmic::applet::menu_button(cosmic::iced_widget::row![
@@ -99,47 +86,114 @@ pub fn collapsible_two_column_package_list_widget<'a>(
     .on_press(on_press_mesage);
     match collapsed {
         Collapsed::Collapsed => heading.into(),
-        Collapsed::Expanded => {
-            let children = two_column_package_list_widget(
-                package_list.take(max_items),
-                space_xxs,
-                overflow_line,
-            );
-            cosmic::iced_widget::column![heading, children].into()
-        }
+        Collapsed::Expanded => cosmic::iced_widget::column![heading, contents].into(),
     }
 }
 
-fn two_column_package_list_widget<'a>(
-    text: impl Iterator<Item = DisplayPackage> + 'a,
-    left_margin_px: u16,
-    footer: Option<String>,
+pub fn news_available_widget<'a>(
+    news_list: impl ExactSizeIterator<Item = &'a DatedNewsItem> + 'a,
+    collapsed: &Collapsed,
+    title: String,
+    on_press_mesage: Message,
+    max_items: usize,
 ) -> Element<'a, Message> {
+    let cosmic::cosmic_theme::Spacing { space_xxs, .. } = theme::active().cosmic().spacing;
+    let children = news_list_widget(news_list, max_items, space_xxs);
+    cosmic_collapsible_row_widget(children, collapsed, title, on_press_mesage)
+}
+
+pub fn updates_available_widget<'a>(
+    package_list: impl ExactSizeIterator<Item = DisplayPackage> + 'a,
+    collapsed: &Collapsed,
+    title: String,
+    on_press_mesage: Message,
+    max_items: usize,
+) -> Element<'a, Message> {
+    let cosmic::cosmic_theme::Spacing { space_xxs, .. } = theme::active().cosmic().spacing;
+    let children = package_list_widget(package_list, max_items, space_xxs);
+    cosmic_collapsible_row_widget(children, collapsed, title, on_press_mesage)
+}
+
+fn cosmic_overflowing_list_widget<'a>(
+    items: impl ExactSizeIterator<Item = Element<'a, Message>>,
+    max_items: usize,
+    left_margin_px: u16,
+) -> Element<'a, Message> {
+    let list_len = items.len();
+    let overflow_line = {
+        if list_len > max_items {
+            Some(fl!("n-more", n = (list_len - max_items)))
+        } else {
+            None
+        }
+    };
     let cosmic_padding = cosmic::applet::menu_control_padding();
     let footer_padding = cosmic_padding.left(cosmic_padding.left + left_margin_px as f32);
-    let footer = footer.map(|footer| {
+    let footer = overflow_line.map(|footer| {
         cosmic::widget::container(cosmic::widget::text::body(footer))
             .padding(footer_padding)
             .into()
     });
-    cosmic::widget::column::Column::with_children(
-        text.map(|pkg| {
-            cosmic::widget::flex_row(vec![
-                cosmic::widget::container(cosmic_url_widget_body(
-                    pkg.pretty_print_pkgname_and_repo(),
-                    pkg.url.clone(),
-                ))
-                .padding([0, 0, 0, left_margin_px])
-                .into(),
-                cosmic::widget::text::body(pkg.pretty_print_version_change()).into(),
-            ])
-            .justify_content(JustifyContent::SpaceBetween)
-            .padding(cosmic_padding)
-            .into()
-        })
-        .chain(footer),
-    )
+    cosmic::widget::column::Column::with_children(items.take(max_items).chain(footer)).into()
+}
+
+fn display_package_widget(
+    package: DisplayPackage,
+    left_margin_px: u16,
+) -> Element<'static, Message> {
+    let cosmic_padding = cosmic::applet::menu_control_padding();
+    cosmic::widget::flex_row(vec![
+        cosmic::widget::container(cosmic_url_widget_body(
+            package.pretty_print_pkgname_and_repo(),
+            package.url.clone(),
+        ))
+        .padding([0, 0, 0, left_margin_px])
+        .into(),
+        cosmic::widget::text::body(package.pretty_print_version_change()).into(),
+    ])
+    .justify_content(JustifyContent::SpaceBetween)
+    .padding(cosmic_padding)
     .into()
+}
+
+fn display_news_widget(news: &DatedNewsItem, left_margin_px: u16) -> Element<'_, Message> {
+    let cosmic_padding = cosmic::applet::menu_control_padding();
+    cosmic::widget::flex_row(vec![
+        cosmic::widget::text::body(news.date.format("%d/%m/%Y %H:%M").to_string()).into(),
+        cosmic::widget::container(cosmic_url_widget_body(
+            news.title.clone().unwrap_or_default(),
+            news.link.clone(),
+        ))
+        .padding([0, 0, 0, left_margin_px])
+        .into(),
+    ])
+    .justify_content(JustifyContent::SpaceBetween)
+    .padding(cosmic_padding)
+    .into()
+}
+
+fn package_list_widget<'a>(
+    text: impl ExactSizeIterator<Item = DisplayPackage> + 'a,
+    max_items: usize,
+    left_margin_px: u16,
+) -> Element<'a, Message> {
+    cosmic_overflowing_list_widget(
+        text.map(|pkg| display_package_widget(pkg, left_margin_px)),
+        max_items,
+        left_margin_px,
+    )
+}
+
+fn news_list_widget<'a>(
+    text: impl ExactSizeIterator<Item = &'a DatedNewsItem> + 'a,
+    max_items: usize,
+    left_margin_px: u16,
+) -> Element<'a, Message> {
+    cosmic_overflowing_list_widget(
+        text.map(|pkg| display_news_widget(pkg, left_margin_px)),
+        max_items,
+        left_margin_px,
+    )
 }
 
 // TODO: Underline if this is a URL

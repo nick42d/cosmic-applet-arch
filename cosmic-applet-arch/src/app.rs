@@ -33,6 +33,7 @@ pub struct CosmicAppletArch {
     pacman_list_state: Collapsed,
     aur_list_state: Collapsed,
     devel_list_state: Collapsed,
+    news_list_state: Collapsed,
     refresh_pressed_notifier: Arc<tokio::sync::Notify>,
     clear_news_pressed_notifier: Arc<tokio::sync::Notify>,
     last_checked: Option<DateTime<Local>>,
