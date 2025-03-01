@@ -1,6 +1,6 @@
 use super::{CosmicAppletArch, Message, CYCLES, SUBSCRIPTION_BUF_SIZE};
 use crate::app::{INTERVAL, TIMEOUT};
-use crate::news::NewsCache;
+use crate::news::{set_news_last_read, NewsCache};
 use crate::news::{DatedNewsItem, WarnedResult};
 use arch_updates_rs::{
     AurUpdate, AurUpdatesCache, DevelUpdate, DevelUpdatesCache, PacmanUpdate, PacmanUpdatesCache,
@@ -39,12 +39,19 @@ pub fn subscription(app: &CosmicAppletArch) -> cosmic::iced::Subscription<Messag
             eprintln!("Error {e} sending Arch update status - maybe the applet has been dropped.")
         });
     }
-    async fn send_news(tx: &mut mpsc::Sender<Message>, news: Vec<DatedNewsItem>) {
-        tx.send(Message::CheckNewsMsg(news))
-            .await
-            .unwrap_or_else(|e| {
-                eprintln!("Error {e} sending Arch news status - maybe the applet has been dropped.")
-            });
+    async fn send_news(
+        tx: &mut mpsc::Sender<Message>,
+        news: Vec<DatedNewsItem>,
+        checked_online_time: Option<DateTime<Local>>,
+    ) {
+        tx.send(Message::CheckNewsMsg {
+            news,
+            checked_online_time,
+        })
+        .await
+        .unwrap_or_else(|e| {
+            eprintln!("Error {e} sending Arch news status - maybe the applet has been dropped.")
+        });
     }
     async fn send_news_error(tx: &mut mpsc::Sender<Message>, e: impl std::fmt::Display) {
         tx.send(Message::CheckNewsErrorsMsg(format!("{e}")))
@@ -127,6 +134,7 @@ pub fn subscription(app: &CosmicAppletArch) -> cosmic::iced::Subscription<Messag
         // Offline checks will be skipped until we can run one.
         let mut cache = None;
         let mut interval = tokio::time::interval(INTERVAL);
+        let mut last_checked_online_time = None;
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {
             let notified = clear_news_pressed_notifier.notified();
@@ -169,10 +177,17 @@ pub fn subscription(app: &CosmicAppletArch) -> cosmic::iced::Subscription<Messag
                         CheckType::Online => Some(Local::now()),
                         CheckType::Offline => None,
                     };
-                    send_news(&mut tx, updates).await;
+                    if let Some(checked_online_time) = checked_online_time {
+                        last_checked_online_time = Some(checked_online_time);
+                    }
+                    send_news(&mut tx, updates, checked_online_time).await;
                 }
                 _ = notified => {
-                    counter = 1;
+                    counter = 1; // ??
+                    // Don't allow user to clear news if we haven't checked online yet (shouldn't be literally possible...)
+                    if let Some(last_checked_online_time) = last_checked_online_time {
+                        set_news_last_read(last_checked_online_time.into()).await.unwrap();
+                    }
                     todo!();
                     // let updates = flat_erased_timeout(TIMEOUT,todo!()).await;
                     // match updates {

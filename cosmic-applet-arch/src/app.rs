@@ -33,7 +33,6 @@ pub struct CosmicAppletArch {
     pacman_list_state: Collapsed,
     aur_list_state: Collapsed,
     devel_list_state: Collapsed,
-    news_list_state: Collapsed,
     refresh_pressed_notifier: Arc<tokio::sync::Notify>,
     clear_news_pressed_notifier: Arc<tokio::sync::Notify>,
     last_checked: Option<DateTime<Local>>,
@@ -45,14 +44,20 @@ pub struct CosmicAppletArch {
 pub enum NewsState {
     #[default]
     Init,
-    Received(Vec<news::DatedNewsItem>),
+    Received {
+        last_checked_online: Option<chrono::DateTime<Local>>,
+        value: Vec<news::DatedNewsItem>,
+    },
     Clearing {
+        last_checked_online: Option<chrono::DateTime<Local>>,
         last_value: Vec<DatedNewsItem>,
     },
     ClearingError {
+        last_checked_online: Option<chrono::DateTime<Local>>,
         last_value: Vec<DatedNewsItem>,
     },
     Error {
+        last_checked_online: Option<chrono::DateTime<Local>>,
         last_value: Vec<news::DatedNewsItem>,
         error: String,
     },
@@ -68,7 +73,10 @@ pub enum Message {
         updates: Updates,
         checked_online_time: Option<DateTime<Local>>,
     },
-    CheckNewsMsg(Vec<news::DatedNewsItem>),
+    CheckNewsMsg {
+        news: Vec<news::DatedNewsItem>,
+        checked_online_time: Option<DateTime<Local>>,
+    },
     CheckNewsErrorsMsg(String),
     ClearNewsMsg,
     CheckUpdatesErrorsMsg {
@@ -83,7 +91,6 @@ pub enum CollapsibleType {
     AurUpdates,
     PacmanUpdates,
     DevelUpdates,
-    News,
 }
 
 impl Application for CosmicAppletArch {
@@ -145,7 +152,10 @@ impl Application for CosmicAppletArch {
                 error_time,
             } => self.handle_update_error(error_string, error_time),
             Message::OpenUrl(url) => self.handle_open_url(url),
-            Message::CheckNewsMsg(news) => self.handle_check_news_msg(news),
+            Message::CheckNewsMsg {
+                news,
+                checked_online_time,
+            } => self.handle_check_news_msg(news, checked_online_time),
             Message::CheckNewsErrorsMsg(e) => self.handle_check_news_errors_msg(e),
             Message::ClearNewsMsg => self.handle_clear_news_msg(),
         }
@@ -157,28 +167,50 @@ impl Application for CosmicAppletArch {
 }
 
 impl CosmicAppletArch {
-    fn handle_check_news_msg(&mut self, news: Vec<DatedNewsItem>) -> Task<Message> {
+    fn handle_check_news_msg(
+        &mut self,
+        news: Vec<DatedNewsItem>,
+        time: Option<chrono::DateTime<Local>>,
+    ) -> Task<Message> {
         // TODO: Consider bouncing this task like we do in handle_updates.
-        self.news = NewsState::Received(news);
+        self.news = NewsState::Received {
+            value: news,
+            last_checked_online: time,
+        };
         Task::none()
     }
     fn handle_check_news_errors_msg(&mut self, e: String) -> Task<Message> {
         let old_news = std::mem::take(&mut self.news);
         self.news = match old_news {
             NewsState::Init => NewsState::Init,
-            NewsState::Received(vec) => NewsState::Error {
-                last_value: vec,
+            NewsState::Received {
+                last_checked_online,
+                value,
+            } => NewsState::Error {
+                last_checked_online,
+                last_value: value,
                 error: e,
             },
-            NewsState::Clearing { last_value } | NewsState::ClearingError { last_value } => {
-                NewsState::Error {
-                    last_value,
-                    error: e,
-                }
+            NewsState::Clearing {
+                last_value,
+                last_checked_online,
             }
-            NewsState::Error { last_value, .. } => NewsState::Error {
+            | NewsState::ClearingError {
+                last_value,
+                last_checked_online,
+            } => NewsState::Error {
                 last_value,
                 error: e,
+                last_checked_online,
+            },
+            NewsState::Error {
+                last_value,
+                last_checked_online,
+                ..
+            } => NewsState::Error {
+                last_value,
+                error: e,
+                last_checked_online,
             },
         };
         Task::none()
@@ -187,10 +219,35 @@ impl CosmicAppletArch {
         let old_news = std::mem::take(&mut self.news);
         self.news = match old_news {
             NewsState::Init => NewsState::Init,
-            NewsState::Received(vec) => NewsState::Clearing { last_value: vec },
-            NewsState::Clearing { last_value } => NewsState::Clearing { last_value },
-            NewsState::ClearingError { last_value } => NewsState::Clearing { last_value },
-            NewsState::Error { last_value, error } => NewsState::Clearing { last_value },
+            NewsState::Received {
+                last_checked_online,
+                value,
+            } => NewsState::Clearing {
+                last_value: value,
+                last_checked_online,
+            },
+            NewsState::Clearing {
+                last_value,
+                last_checked_online,
+            } => NewsState::Clearing {
+                last_value,
+                last_checked_online,
+            },
+            NewsState::ClearingError {
+                last_value,
+                last_checked_online,
+            } => NewsState::Clearing {
+                last_value,
+                last_checked_online,
+            },
+            NewsState::Error {
+                last_value,
+                error,
+                last_checked_online,
+            } => NewsState::Clearing {
+                last_value,
+                last_checked_online,
+            },
         };
         self.clear_news_pressed_notifier.notify_one();
         Task::none()
@@ -234,7 +291,6 @@ impl CosmicAppletArch {
                 self.pacman_list_state = self.pacman_list_state.toggle()
             }
             CollapsibleType::DevelUpdates => self.devel_list_state = self.devel_list_state.toggle(),
-            CollapsibleType::News => self.news_list_state = self.news_list_state.toggle(),
         }
         Task::none()
     }
