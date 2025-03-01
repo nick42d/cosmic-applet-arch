@@ -29,21 +29,44 @@ pub struct CosmicAppletArch {
     core: Core,
     /// Default field for cosmic applet
     popup: Option<Id>,
-    updates: Option<Updates>,
     pacman_list_state: Collapsed,
     aur_list_state: Collapsed,
     devel_list_state: Collapsed,
     refresh_pressed_notifier: Arc<tokio::sync::Notify>,
     clear_news_pressed_notifier: Arc<tokio::sync::Notify>,
-    last_checked: Option<DateTime<Local>>,
-    error: Option<String>,
     news: NewsState,
+    updates: UpdatesState,
+}
+
+#[derive(Default, Debug)]
+pub enum UpdatesState {
+    #[default]
+    Init,
+    InitError {
+        error: String,
+    },
+    Received {
+        last_checked_online: chrono::DateTime<Local>,
+        value: Updates,
+    },
+    Refreshing {
+        last_checked_online: chrono::DateTime<Local>,
+        last_value: Updates,
+    },
+    Error {
+        last_checked_online: chrono::DateTime<Local>,
+        last_value: Updates,
+        error: String,
+    },
 }
 
 #[derive(Default, Debug)]
 pub enum NewsState {
     #[default]
     Init,
+    InitError {
+        error: String,
+    },
     Received {
         last_checked_online: Option<chrono::DateTime<Local>>,
         value: Vec<news::DatedNewsItem>,
@@ -71,17 +94,16 @@ pub enum Message {
     PopupClosed(Id),
     CheckUpdatesMsg {
         updates: Updates,
-        checked_online_time: Option<DateTime<Local>>,
+        checked_online_time: DateTime<Local>,
     },
     CheckNewsMsg {
         news: Vec<news::DatedNewsItem>,
-        checked_online_time: Option<DateTime<Local>>,
+        checked_online_time: DateTime<Local>,
     },
     CheckNewsErrorsMsg(String),
     ClearNewsMsg,
     CheckUpdatesErrorsMsg {
         error_string: String,
-        error_time: DateTime<Local>,
     },
     OpenUrl(String),
 }
@@ -182,7 +204,8 @@ impl CosmicAppletArch {
     fn handle_check_news_errors_msg(&mut self, e: String) -> Task<Message> {
         let old_news = std::mem::take(&mut self.news);
         self.news = match old_news {
-            NewsState::Init => NewsState::Init,
+            NewsState::Init => NewsState::InitError { error: e },
+            NewsState::InitError { .. } => NewsState::InitError { error: e },
             NewsState::Received {
                 last_checked_online,
                 value,
@@ -218,7 +241,10 @@ impl CosmicAppletArch {
     fn handle_clear_news_msg(&mut self) -> Task<Message> {
         let old_news = std::mem::take(&mut self.news);
         self.news = match old_news {
-            NewsState::Init => NewsState::Init,
+            NewsState::Init | NewsState::InitError { .. } => {
+                eprintln!("Warning: Tried to clear news, but there wasn't any");
+                old_news
+            }
             NewsState::Received {
                 last_checked_online,
                 value,
@@ -305,15 +331,40 @@ impl CosmicAppletArch {
         Task::none()
     }
     fn handle_update_error(&mut self, error: String, error_time: DateTime<Local>) -> Task<Message> {
-        self.error = Some(error);
-        self.last_checked = Some(error_time);
+        let old = std::mem::take(&mut self.updates);
+        self.updates = match old {
+            UpdatesState::Init | UpdatesState::InitError { .. } => {
+                UpdatesState::InitError { error }
+            }
+            UpdatesState::Received {
+                last_checked_online,
+                value,
+            } => UpdatesState::Error {
+                last_checked_online,
+                last_value: value,
+                error,
+            },
+            UpdatesState::Refreshing {
+                last_checked_online,
+                last_value,
+            }
+            | UpdatesState::Error {
+                last_checked_online,
+                last_value,
+                ..
+            } => UpdatesState::Error {
+                last_checked_online,
+                last_value,
+                error,
+            },
+        };
         Task::none()
     }
-    fn handle_updates(&mut self, updates: Updates, time: Option<DateTime<Local>>) -> Task<Message> {
+    fn handle_updates(&mut self, updates: Updates, time: DateTime<Local>) -> Task<Message> {
         // When first receiving updates, autosize will not trigger until the second
         // message is received. So, we intentionally bounce this message if it's
         // the first time updates have been received.
-        let task: Task<Message> = if self.updates.is_none() {
+        let task = if matches!(self.updates, UpdatesState::Init) {
             Task::done(cosmic::app::Message::App(Message::CheckUpdatesMsg {
                 updates: updates.clone(),
                 checked_online_time: time,
@@ -321,11 +372,10 @@ impl CosmicAppletArch {
         } else {
             Task::none()
         };
-        self.updates = Some(updates);
-        if let Some(time) = time {
-            self.last_checked = Some(time);
-        }
-        self.error = None;
+        self.updates = UpdatesState::Received {
+            last_checked_online: time,
+            value: updates,
+        };
         task
     }
 }
