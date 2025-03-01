@@ -159,13 +159,13 @@ fn display_package_widget(
 fn display_news_widget(news: &DatedNewsItem, left_margin_px: u16) -> Element<'_, Message> {
     let cosmic_padding = cosmic::applet::menu_control_padding();
     cosmic::widget::flex_row(vec![
-        cosmic::widget::text::body(news.date.format("%d/%m/%Y %H:%M").to_string()).into(),
         cosmic::widget::container(cosmic_url_widget_body(
             news.title.clone().unwrap_or_default(),
             news.link.clone(),
         ))
         .padding([0, 0, 0, left_margin_px])
         .into(),
+        cosmic::widget::text::body(news.date.format("%d/%m/%Y %H:%M").to_string()).into(),
     ])
     .justify_content(JustifyContent::SpaceBetween)
     .padding(cosmic_padding)
@@ -184,7 +184,7 @@ fn package_list_widget<'a>(
     )
 }
 
-fn news_list_widget<'a>(
+pub fn news_list_widget<'a>(
     text: impl ExactSizeIterator<Item = &'a DatedNewsItem> + 'a,
     max_items: usize,
     left_margin_px: u16,

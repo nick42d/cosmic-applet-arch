@@ -3,6 +3,7 @@ updates-available = { $numberUpdates ->
     [one] 1 { $updateSource } update available
    *[other] { $numberUpdates } { $updateSource } updates available
 }
+news = News since last update - Click to clear
 no-updates-available = No updates available.
 loading = Loading...
 last-checked = Last checked: { $dateTime } - Click to refresh

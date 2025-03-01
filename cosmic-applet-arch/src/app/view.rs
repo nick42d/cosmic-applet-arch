@@ -17,7 +17,8 @@ use std::{rc::Rc, sync::LazyLock};
 pub use widgets::*;
 mod widgets;
 
-const MAX_LINES: usize = 20;
+const MAX_UPDATE_LINES: usize = 20;
+const MAX_NEWS_LINES: usize = 3;
 
 // This is the same mechanism the official cosmic applets use.
 static AUTOSIZE_MAIN_ID: LazyLock<Id> = LazyLock::new(|| Id::new("autosize-main"));
@@ -133,7 +134,7 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
             updateSource = "pacman"
         ),
         Message::ToggleCollapsible(crate::app::CollapsibleType::PacmanUpdates),
-        MAX_LINES,
+        MAX_UPDATE_LINES,
     );
     let aur_list = updates_available_widget(
         updates.aur.iter().map(DisplayPackage::from_aur_update),
@@ -144,7 +145,7 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
             updateSource = "AUR"
         ),
         Message::ToggleCollapsible(crate::app::CollapsibleType::AurUpdates),
-        MAX_LINES,
+        MAX_UPDATE_LINES,
     );
     let devel_list = updates_available_widget(
         updates.devel.iter().map(DisplayPackage::from_devel_update),
@@ -155,17 +156,15 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
             updateSource = "devel"
         ),
         Message::ToggleCollapsible(crate::app::CollapsibleType::DevelUpdates),
-        MAX_LINES,
+        MAX_UPDATE_LINES,
     );
     let news_row = match &app.news {
         crate::app::NewsState::Init => None,
-        crate::app::NewsState::Received(vec) => Some(news_available_widget(
-            vec.iter(),
-            &app.news_list_state,
-            format!("TODO {}", vec.len()),
-            Message::ToggleCollapsible(crate::app::CollapsibleType::News),
-            MAX_LINES,
-        )),
+        crate::app::NewsState::Received(vec) => Some(cosmic::iced_widget::column![
+            cosmic::applet::menu_button(cosmic::widget::text::body(fl!("news")))
+                .on_press(Message::ClearNewsMsg),
+            news_list_widget(vec.iter(), MAX_NEWS_LINES, space_xxs)
+        ]),
         crate::app::NewsState::Clearing { last_value } => todo!(),
         crate::app::NewsState::ClearingError { last_value } => todo!(),
         crate::app::NewsState::Error { last_value, error } => todo!(),
