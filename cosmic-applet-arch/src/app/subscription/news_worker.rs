@@ -1,20 +1,14 @@
-use super::messages_to_app::{send_news, send_news_error, send_update, send_update_error};
-use super::{CosmicAppletArch, Message, CYCLES, SUBSCRIPTION_BUF_SIZE};
+use super::messages_to_app::{send_news, send_news_error};
+use super::{Message, CYCLES};
 use crate::app::subscription::core::{
     consume_warning, flat_erased_timeout, get_news_offline, CheckType, OnlineNewsResidual,
 };
 use crate::app::{INTERVAL, TIMEOUT};
-use crate::news::{get_news_online, set_news_last_read, NewsCache};
-use crate::news::{DatedNewsItem, WarnedResult};
-use arch_updates_rs::{
-    AurUpdate, AurUpdatesCache, DevelUpdate, DevelUpdatesCache, PacmanUpdate, PacmanUpdatesCache,
-};
-use chrono::{DateTime, Local};
-use cosmic::iced::futures::{channel::mpsc, SinkExt};
-use futures::{FutureExt, TryFutureExt};
-use std::future::Future;
+use crate::news::{get_news_online, set_news_last_read};
+use chrono::Local;
+use cosmic::iced::futures::channel::mpsc;
+use futures::FutureExt;
 use std::sync::Arc;
-use tokio::join;
 use tokio::sync::Notify;
 
 pub async fn raw_news_worker(

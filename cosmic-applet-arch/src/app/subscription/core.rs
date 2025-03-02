@@ -1,17 +1,12 @@
-use super::messages_to_app::{send_news, send_news_error, send_update, send_update_error};
-use super::{CosmicAppletArch, Message, CYCLES, SUBSCRIPTION_BUF_SIZE};
-use crate::app::{INTERVAL, TIMEOUT};
-use crate::news::{set_news_last_read, NewsCache};
+use crate::news::NewsCache;
 use crate::news::{DatedNewsItem, WarnedResult};
 use arch_updates_rs::{
     AurUpdate, AurUpdatesCache, DevelUpdate, DevelUpdatesCache, PacmanUpdate, PacmanUpdatesCache,
 };
 use chrono::{DateTime, Local};
-use cosmic::iced::futures::{channel::mpsc, SinkExt};
-use futures::{FutureExt, TryFutureExt};
+use futures::TryFutureExt;
 use std::future::Future;
 use tokio::join;
-use tokio::sync::Notify;
 
 #[derive(Clone, Copy, Debug)]
 pub enum CheckType {

@@ -73,7 +73,7 @@ pub async fn get_latest_arch_news(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::{DateTime, TimeZone};
+    use chrono::TimeZone;
     use std::io::BufReader;
 
     /// May panic
