@@ -6,7 +6,7 @@ use cosmic::iced::Limits;
 use cosmic::{Application, Element};
 use std::sync::Arc;
 use std::time::Duration;
-use subscription::Updates;
+use subscription::core::Updates;
 use view::Collapsed;
 
 use crate::news::{self, DatedNewsItem};
@@ -68,19 +68,19 @@ pub enum NewsState {
         error: String,
     },
     Received {
-        last_checked_online: Option<chrono::DateTime<Local>>,
+        last_checked_online: chrono::DateTime<Local>,
         value: Vec<news::DatedNewsItem>,
     },
     Clearing {
-        last_checked_online: Option<chrono::DateTime<Local>>,
+        last_checked_online: chrono::DateTime<Local>,
         last_value: Vec<DatedNewsItem>,
     },
     ClearingError {
-        last_checked_online: Option<chrono::DateTime<Local>>,
+        last_checked_online: chrono::DateTime<Local>,
         last_value: Vec<DatedNewsItem>,
     },
     Error {
-        last_checked_online: Option<chrono::DateTime<Local>>,
+        last_checked_online: chrono::DateTime<Local>,
         last_value: Vec<news::DatedNewsItem>,
         error: String,
     },
@@ -169,10 +169,9 @@ impl Application for CosmicAppletArch {
             } => self.handle_updates(updates, checked_online_time),
             Message::ForceGetUpdates => self.handle_force_get_updates(),
             Message::ToggleCollapsible(update_type) => self.handle_toggle_collapsible(update_type),
-            Message::CheckUpdatesErrorsMsg {
-                error_string,
-                error_time,
-            } => self.handle_update_error(error_string, error_time),
+            Message::CheckUpdatesErrorsMsg { error_string } => {
+                self.handle_update_error(error_string)
+            }
             Message::OpenUrl(url) => self.handle_open_url(url),
             Message::CheckNewsMsg {
                 news,
@@ -192,7 +191,7 @@ impl CosmicAppletArch {
     fn handle_check_news_msg(
         &mut self,
         news: Vec<DatedNewsItem>,
-        time: Option<chrono::DateTime<Local>>,
+        time: chrono::DateTime<Local>,
     ) -> Task<Message> {
         // TODO: Consider bouncing this task like we do in handle_updates.
         self.news = NewsState::Received {
@@ -330,7 +329,7 @@ impl CosmicAppletArch {
         self.refresh_pressed_notifier.notify_one();
         Task::none()
     }
-    fn handle_update_error(&mut self, error: String, error_time: DateTime<Local>) -> Task<Message> {
+    fn handle_update_error(&mut self, error: String) -> Task<Message> {
         let old = std::mem::take(&mut self.updates);
         self.updates = match old {
             UpdatesState::Init | UpdatesState::InitError { .. } => {

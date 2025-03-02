@@ -5,7 +5,7 @@ use super::{CosmicAppletArch, Message, CYCLES, SUBSCRIPTION_BUF_SIZE};
 /// the mock-api feature using the mock_updates.ron and mock_news.ron files.
 mod mock;
 
-mod core;
+pub mod core;
 mod messages_to_app;
 mod news_worker;
 mod updates_worker;

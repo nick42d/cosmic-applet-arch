@@ -1,9 +1,9 @@
 use crate::news::{DatedNewsItem, WarnedResult};
-
-use super::Updates;
 use arch_updates_rs::{AurUpdate, DevelUpdate, PacmanUpdate, SourceRepo};
 use chrono::FixedOffset;
 use serde::Deserialize;
+
+use super::core::Updates;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct MockDatedNewsItem {

@@ -1,5 +1,8 @@
+use super::messages_to_app::{send_news, send_news_error, send_update, send_update_error};
 use super::{CosmicAppletArch, Message, CYCLES, SUBSCRIPTION_BUF_SIZE};
-use crate::app::subscription::core::{consume_warning, flat_erased_timeout, get_news_offline, CheckType, OnlineNewsResidual};
+use crate::app::subscription::core::{
+    consume_warning, flat_erased_timeout, get_news_offline, CheckType, OnlineNewsResidual,
+};
 use crate::app::{INTERVAL, TIMEOUT};
 use crate::news::{get_news_online, set_news_last_read, NewsCache};
 use crate::news::{DatedNewsItem, WarnedResult};
@@ -9,13 +12,15 @@ use arch_updates_rs::{
 use chrono::{DateTime, Local};
 use cosmic::iced::futures::{channel::mpsc, SinkExt};
 use futures::{FutureExt, TryFutureExt};
-use tokio::sync::Notify;
-use super::messages_to_app::{send_news, send_news_error, send_update, send_update_error};
 use std::future::Future;
 use std::sync::Arc;
 use tokio::join;
+use tokio::sync::Notify;
 
-pub async fn raw_news_worker(mut tx: mpsc::Sender<Message>, clear_news_pressed_notifier: Arc<Notify>) {
+pub async fn raw_news_worker(
+    mut tx: mpsc::Sender<Message>,
+    clear_news_pressed_notifier: Arc<Notify>,
+) {
     let mut counter = 0;
     // If we have no cache, that means we haven't run a succesful online check.
     // Offline checks will be skipped until we can run one.
@@ -87,4 +92,4 @@ pub async fn raw_news_worker(mut tx: mpsc::Sender<Message>, clear_news_pressed_n
             }
         }
     }
-};
+}

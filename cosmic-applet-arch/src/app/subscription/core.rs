@@ -1,5 +1,4 @@
 use super::messages_to_app::{send_news, send_news_error, send_update, send_update_error};
-use super::mock;
 use super::{CosmicAppletArch, Message, CYCLES, SUBSCRIPTION_BUF_SIZE};
 use crate::app::{INTERVAL, TIMEOUT};
 use crate::news::{set_news_last_read, NewsCache};
@@ -33,7 +32,7 @@ pub struct OnlineUpdateResidual {
 }
 
 #[derive(Default, Clone)]
-struct CacheState {
+pub struct CacheState {
     pacman_cache: PacmanUpdatesCache,
     aur_cache: AurUpdatesCache,
     devel_cache: DevelUpdatesCache,
@@ -44,6 +43,12 @@ pub struct Updates {
     pub pacman: Vec<PacmanUpdate>,
     pub aur: Vec<AurUpdate>,
     pub devel: Vec<DevelUpdate>,
+}
+
+impl Updates {
+    pub fn total(&self) -> usize {
+        self.pacman.len() + self.aur.len() + self.devel.len()
+    }
 }
 
 /// Helper function - adds a timeout to a future that returns a result.
@@ -65,7 +70,8 @@ where
     }
 }
 
-/// Turn a WarnedResult into a Result, emitting an effect if a warning existed (print to stderr).
+/// Turn a WarnedResult into a Result, emitting an effect if a warning existed
+/// (print to stderr).
 pub fn consume_warning<T, W: std::fmt::Display, E>(w: WarnedResult<T, W, E>) -> Result<T, E> {
     match w {
         WarnedResult::Ok(t) => Ok(t),
