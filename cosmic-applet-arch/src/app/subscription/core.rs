@@ -82,7 +82,7 @@ pub fn consume_warning<T, W: std::fmt::Display, E>(w: WarnedResult<T, W, E>) -> 
 pub async fn get_news_offline(
     _: &NewsCache,
 ) -> WarnedResult<Vec<DatedNewsItem>, String, anyhow::Error> {
-    mock::get_mock_news().await
+    super::mock::get_mock_news().await
 }
 
 #[cfg(not(feature = "mock-api"))]
@@ -99,7 +99,7 @@ pub async fn get_news_online(
 
 #[cfg(feature = "mock-api")]
 pub async fn get_updates_offline(_: &CacheState) -> arch_updates_rs::Result<Updates> {
-    mock::get_mock_updates().await
+    super::mock::get_mock_updates().await
 }
 
 #[cfg(not(feature = "mock-api"))]
