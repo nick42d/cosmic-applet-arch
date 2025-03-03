@@ -225,9 +225,16 @@ pub async fn check_pacman_updates_offline(cache: &PacmanUpdatesCache) -> Result<
 pub async fn check_devel_updates_online() -> Result<(Vec<DevelUpdate>, DevelUpdatesCache)> {
     let devel_packages = get_devel_packages().await?;
     let devel_updates = futures::stream::iter(devel_packages.into_iter())
+        // Get the SRCINFO for each package (as Result<Option<_>>).
         .then(|pkg| async move {
-            let updates = get_aur_srcinfo(&pkg.pkgname)
-                .await?
+            let srcinfo = get_aur_srcinfo(&pkg.pkgname).await;
+            (pkg, srcinfo)
+        })
+        // Remove any None values from the list - these are where the aurweb
+        // api call was succesful but the package wasn't found (ie, package is not an AUR package).
+        .filter_map(|(pkg, maybe_srcinfo)| async { Some((pkg, maybe_srcinfo.transpose()?)) })
+        .then(|(pkg, srcinfo)| async move {
+            let updates = srcinfo?
                 .base
                 .source
                 .into_iter()
