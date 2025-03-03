@@ -80,6 +80,8 @@ pub enum Error {
     GetAurPackageFailed(Option<String>),
     #[error("Error parsing .SRCINFO")]
     ParseErrorSrcinfo(#[from] srcinfo::Error),
+    #[error("checkupdates returned an error: `{0}`")]
+    CheckUpdatesReturnedError(String),
     #[error("Failed to parse update from checkupdates string: `{0}`")]
     ParseErrorCheckUpdates(String),
     #[error("Failed to parse update from pacman string: `{0}`")]
@@ -156,6 +158,11 @@ pub async fn check_pacman_updates_online() -> Result<(Vec<PacmanUpdate>, PacmanU
             .arg("--nocolor")
             .output()
             .await?;
+        // Guard against stderr from checkupdates.
+        let stderr = str::from_utf8(output.stderr.as_slice())?;
+        if !stderr.is_empty() {
+            return Err(Error::CheckUpdatesReturnedError(stderr.to_owned()));
+        };
         str::from_utf8(output.stdout.as_slice())?
             .lines()
             .map(parse_update)
