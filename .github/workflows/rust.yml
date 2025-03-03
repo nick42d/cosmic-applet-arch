@@ -18,7 +18,7 @@ jobs:
     steps:
     - name: Install packages
       run: | 
-        pacman -Syu rust pacman-contrib pkgconf libxkbcommon git just lld --noconfirm --needed
+        pacman -Syu fakeroot rust pacman-contrib pkgconf libxkbcommon git just lld --noconfirm --needed
 
     - name: Checkout
       uses: actions/checkout@v4

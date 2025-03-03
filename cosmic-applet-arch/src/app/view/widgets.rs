@@ -46,7 +46,7 @@ pub fn body_text_row(text: String) -> Element<'static, Message> {
     .into()
 }
 
-pub fn errors_row(error: impl Display) -> Element<'static, Message> {
+pub fn errors_row_widget(error: impl Display) -> Element<'static, Message> {
     cosmic::widget::container(
         cosmic::widget::text::body(fl!("warning-error", error = error.to_string()))
             .width(Length::Fill)

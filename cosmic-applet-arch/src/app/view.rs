@@ -137,9 +137,9 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
         None
     };
     let errors_row = match &app.updates {
-        UpdatesState::InitError { error } => Some(errors_row(error)),
+        UpdatesState::InitError { error } => Some(errors_row_widget(error)),
         // TODO: This should be a special case where the error is pressable.
-        UpdatesState::Error { error, .. } => Some(errors_row(error)),
+        UpdatesState::Error { error, .. } => Some(errors_row_widget(error)),
         UpdatesState::Init | UpdatesState::Received { .. } | UpdatesState::Refreshing { .. } => {
             None
         }
@@ -200,19 +200,32 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
     );
     let news_row = match &app.news {
         NewsState::Init => None,
-        NewsState::InitError { error } => todo!(),
+        NewsState::InitError { error } => Some(errors_row_widget(error)),
         NewsState::Received {
             last_checked_online,
             value,
-        } => Some(cosmic::iced_widget::column![
-            cosmic::applet::menu_button(cosmic::widget::text::body(fl!("news")))
-                .on_press(Message::ClearNewsMsg),
-            news_list_widget(value.iter(), MAX_NEWS_LINES, space_xxs)
-        ]),
+        } => Some(
+            cosmic::iced_widget::column![
+                cosmic::applet::menu_button(cosmic::widget::text::body(fl!("news")))
+                    .on_press(Message::ClearNewsMsg),
+                news_list_widget(value.iter(), MAX_NEWS_LINES, space_xxs)
+            ]
+            .into(),
+        ),
         NewsState::Clearing {
             last_value,
             last_checked_online,
-        } => todo!(),
+        } => Some(
+            cosmic::iced_widget::column![
+                cosmic::iced_widget::row![
+                    cosmic::widget::text::body("Icon here"),
+                    cosmic::applet::menu_button(cosmic::widget::text::body(fl!("news")))
+                        .on_press(Message::ClearNewsMsg),
+                ],
+                news_list_widget(last_value.iter(), MAX_NEWS_LINES, space_xxs)
+            ]
+            .into(),
+        ),
         NewsState::ClearingError {
             last_value,
             last_checked_online,
@@ -223,6 +236,12 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
             last_checked_online,
         } => todo!(),
     };
+    let news_divider =
+        if last_checked_row.is_some() || loading_row.is_some() || errors_row.is_some() {
+            Some(cosmic_applet_divider(space_s).into())
+        } else {
+            None
+        };
 
     let total_updates = pm + aur + dev;
     let content_list = content_list
@@ -236,6 +255,7 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
         .push_maybe(last_checked_row)
         .push_maybe(loading_row)
         .push_maybe(errors_row)
+        .push_maybe(news_divider)
         .push_maybe(news_row);
     app.core.applet.popup_container(content_list).into()
 }
