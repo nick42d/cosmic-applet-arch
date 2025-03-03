@@ -103,16 +103,21 @@ pub async fn get_devel_packages() -> Result<Vec<Package>> {
         .collect())
 }
 
-/// Get and parse the .SRCINFO for an aur package.
-pub async fn get_aur_srcinfo(pkgname: &str) -> Result<Srcinfo> {
+/// Get and parse the .SRCINFO for an package, if its in the AUR.
+pub async fn get_aur_srcinfo(pkgname: &str) -> Result<Option<Srcinfo>> {
     // First we need to get the base repository from the AUR API. Since the pkgname
     // may not be the same as the repository name (and repository can contain
     // multiple packages).
     let aur = raur::Handle::new();
-    let info = &aur
+    let Some(ref info) = aur
         .info(&[&pkgname])
         .await
-        .map_err(|_| Error::GetAurPackageFailed(Some(pkgname.to_string())))?[0];
+        .map_err(|_| Error::GetAurPackageFailed(Some(pkgname.to_string())))?
+        .into_iter()
+        .next()
+    else {
+        return Ok(None);
+    };
     let base = &info.package_base;
 
     let url = format!("https://aur.archlinux.org/cgit/aur.git/plain/.SRCINFO?h={base}");
@@ -122,7 +127,7 @@ pub async fn get_aur_srcinfo(pkgname: &str) -> Result<Srcinfo> {
     let mut srcinfo = Srcinfo::from_str(&raw)?;
     srcinfo.pkg.pkgname = pkgname.to_string();
 
-    Ok(srcinfo)
+    Ok(Some(srcinfo))
 }
 
 /// Get head identifier for a git repo - last 7 digits from commit hash.
@@ -239,14 +244,19 @@ mod tests {
         get_aur_srcinfo("hyprlang-git").await.unwrap();
     }
     #[tokio::test]
+    async fn test_get_srcinfo_not_in_aur() {
+        let output = get_aur_srcinfo("made-up-package").await.unwrap();
+        assert!(output.is_none());
+    }
+    #[tokio::test]
     async fn test_get_url() {
-        let srcinfo = get_aur_srcinfo("hyprlang-git").await.unwrap();
+        let srcinfo = get_aur_srcinfo("hyprlang-git").await.unwrap().unwrap();
         let url = srcinfo.base.source.first().unwrap().vec.first().unwrap();
         parse_url(url).unwrap();
     }
     #[tokio::test]
     async fn test_get_head() {
-        let srcinfo = get_aur_srcinfo("hyprutils-git").await.unwrap();
+        let srcinfo = get_aur_srcinfo("hyprutils-git").await.unwrap().unwrap();
         let url = srcinfo.base.source.first().unwrap().vec.first().unwrap();
         let url_parsed = parse_url(url).unwrap();
         get_head_identifier(url_parsed.remote, url_parsed.branch)
