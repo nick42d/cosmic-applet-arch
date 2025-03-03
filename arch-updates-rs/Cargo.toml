@@ -1,6 +1,6 @@
 [package]
 name = "arch-updates-rs"
-version = "0.1.2"
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
 description = "Library to query arch linux packaging tools to see if updates are available."
