@@ -118,6 +118,7 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
         MAX_UPDATE_LINES,
     );
     let mut news_error_row = None;
+    todo!("News row should be different, if there isn't any news!");
     let news_row = match &app.news {
         NewsState::Init => None,
         NewsState::InitError { error } => Some(errors_row_widget(error)),
