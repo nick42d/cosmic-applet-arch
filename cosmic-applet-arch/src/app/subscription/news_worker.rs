@@ -62,12 +62,15 @@ pub async fn raw_news_worker(
                 };
             }
             _ = notified => {
-                counter = 1; // ??
+                counter = 1;
                 // Don't allow user to clear news if we haven't checked online yet (shouldn't be literally possible...)
                 if let Some(residual) = residual {
                     if let Err(e) = set_news_last_read(residual.time.into()).await {
-                        todo!();
+                        // For now, this is just a console warning.
+                        eprintln!("WARN: Error storing local cache {e}");
                     }
+                } else {
+                    eprintln!("WARN: User cleared news before it had been checked online - shouldn't be possible!");
                 }
                 // The theory here, is that by running a get_news right after a set_news, this will clear the news (if there isn't any new on the server).
                 // Otherwise, it will send the latest news (which, if we don't do here, is just going to trigger on the next online refresh anyway).
