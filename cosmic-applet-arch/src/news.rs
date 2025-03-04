@@ -16,7 +16,7 @@ pub async fn get_news_online(
 ) -> WarnedResult<(Vec<DatedNewsItem>, NewsCache), String, anyhow::Error> {
     latest_update::get_latest_update(&Arch)
         .await
-        .async_and_then(async |cutoff| get_latest_arch_news(&Network, cutoff.into()).await)
+        .async_and_then(async |cutoff| get_latest_arch_news(&Network, cutoff).await)
         .await
         .map(|updates| (updates.clone(), NewsCache(updates)))
 }
@@ -28,7 +28,7 @@ pub async fn get_news_offline(
         NewsCache::clone(cache)
             .0
             .into_iter()
-            .filter(|item| item.date >= cutoff)
+            .filter(|item| cutoff.is_none_or(|cutoff| item.date >= cutoff))
             .collect()
     })
 }

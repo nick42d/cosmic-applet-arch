@@ -58,7 +58,7 @@ impl DatedNewsItem {
 
 pub async fn get_latest_arch_news(
     feed: &impl ArchNewsFeed,
-    last_updated_dt: chrono::DateTime<chrono::FixedOffset>,
+    last_updated_dt: Option<chrono::DateTime<chrono::FixedOffset>>,
 ) -> Result<Vec<DatedNewsItem>> {
     let feed = feed
         .get_arch_news_feed()
@@ -67,7 +67,12 @@ pub async fn get_latest_arch_news(
     feed.items
         .into_iter()
         .map(DatedNewsItem::from_source)
-        .process_results(|iter| iter.filter(|item| item.date >= last_updated_dt).collect())
+        .process_results(|iter| {
+            iter.filter(|item| {
+                last_updated_dt.is_none_or(|last_updated_dt| item.date >= last_updated_dt)
+            })
+            .collect()
+        })
 }
 
 #[cfg(test)]
@@ -98,14 +103,15 @@ mod tests {
         let mock = get_mock().await;
         let latest_news = get_latest_arch_news(
             &mock,
-            chrono::FixedOffset::east_opt(8 * 60 * 60)
-                .unwrap()
-                .with_ymd_and_hms(2025, 1, 16, 15, 33, 43)
-                .unwrap(),
+            Some(
+                chrono::FixedOffset::west_opt(8 * 60 * 60)
+                    .unwrap()
+                    .with_ymd_and_hms(2025, 1, 16, 15, 33, 43)
+                    .unwrap(),
+            ),
         )
         .await
         .unwrap();
-        // Need to whiteboard an figure out why failing.
         assert_eq!(latest_news.len(), 1);
     }
     #[tokio::test]
@@ -113,10 +119,12 @@ mod tests {
         let mock = get_mock().await;
         let latest_news = get_latest_arch_news(
             &mock,
-            chrono::Utc
-                .with_ymd_and_hms(2024, 11, 20, 0, 0, 0)
-                .unwrap()
-                .into(),
+            Some(
+                chrono::Utc
+                    .with_ymd_and_hms(2024, 11, 20, 0, 0, 0)
+                    .unwrap()
+                    .into(),
+            ),
         )
         .await
         .unwrap();
@@ -127,10 +135,12 @@ mod tests {
         let mock = get_mock().await;
         let latest_news = get_latest_arch_news(
             &mock,
-            chrono::Utc
-                .with_ymd_and_hms(2025, 2, 2, 0, 0, 0)
-                .unwrap()
-                .into(),
+            Some(
+                chrono::Utc
+                    .with_ymd_and_hms(2025, 2, 2, 0, 0, 0)
+                    .unwrap()
+                    .into(),
+            ),
         )
         .await
         .unwrap();

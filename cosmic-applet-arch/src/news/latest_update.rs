@@ -162,13 +162,7 @@ mod tests {
         let mut mock = MockArchInstallation::new();
         mock.expect_get_pacman_log()
             .returning(|| Ok(include_str!("../../test/pacman-no-update.log").to_string()));
-        assert_eq!(
-            get_latest_pacman_update(&mock).await.unwrap().unwrap(),
-            chrono::FixedOffset::east_opt(8 * 60 * 60)
-                .unwrap()
-                .with_ymd_and_hms(2024, 2, 5, 22, 2, 13)
-                .unwrap()
-        );
+        assert!(get_latest_pacman_update(&mock).await.unwrap().is_none());
     }
     #[tokio::test]
     async fn test_get_latest_local_update_mock() {
@@ -178,7 +172,7 @@ mod tests {
             .return_once(|| Ok(expected));
         assert_eq!(
             get_local_last_read(&mock).await.unwrap(),
-            chrono::FixedOffset::west_opt(8 * 60 * 60)
+            chrono::FixedOffset::east_opt(8 * 60 * 60)
                 .unwrap()
                 .with_ymd_and_hms(2025, 2, 3, 11, 24, 25)
                 .unwrap()

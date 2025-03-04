@@ -151,11 +151,11 @@ impl Application for CosmicAppletArch {
     }
     // view is what is displayed in the toolbar when run as an applet.
     fn view(&self) -> Element<Self::Message> {
-        view::view(self)
+        view::view::view(self)
     }
     // view_window is what is displayed in the popup.
     fn view_window(&self, id: Id) -> Element<Self::Message> {
-        view::view_window(self, id)
+        view::view_window::view_window(self, id)
     }
     // NOTE: Tasks may be returned for asynchronous execution on a
     // background thread managed by the application's executor.
