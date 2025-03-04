@@ -1,5 +1,5 @@
 use anyhow::{anyhow, Context};
-use chrono::{DateTime, FixedOffset, Local};
+use chrono::{DateTime, FixedOffset};
 use directories::ProjectDirs;
 use std::path::PathBuf;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
@@ -63,19 +63,24 @@ fn platform_local_last_read_path() -> std::io::Result<PathBuf> {
 
 pub async fn get_latest_update(
     platform: &impl ArchInstallation,
-) -> WarnedResult<DateTime<Local>, String, anyhow::Error> {
+) -> WarnedResult<Option<DateTime<FixedOffset>>, String, anyhow::Error> {
     let (local_last_read, latest_pacman_update) = futures::future::join(
         get_local_last_read(platform),
         get_latest_pacman_update(platform),
     )
     .await;
     match (local_last_read, latest_pacman_update) {
-        (Ok(local_dt), Ok(pacman_dt)) => WarnedResult::Ok(local_dt.max(pacman_dt)),
+        (local_dt, Ok(None)) => {
+            WarnedResult::from_result(local_dt.context("Error determining last update")).map(Some)
+        },
+        (Ok(local_dt), Ok(Some(pacman_dt))) => {
+            WarnedResult::Ok(Some(local_dt.max(pacman_dt)))
+        },
         (Ok(local_dt), Err(e)) => {
-            WarnedResult::Warning(local_dt, format!("Recieved an error determining last update, but there was a fallback method that could be used {e}"))
+            WarnedResult::Warning(Some(local_dt), format!("Recieved an error determining last update, but there was a fallback method that could be used {e}"))
         },
         // In this case, we've got a pacman dt but no local dt. This is normal enough not to need to warn.
-        (Err(e), Ok(pacman_dt)) => WarnedResult::Ok(pacman_dt),
+        (Err(_), Ok(pacman_dt)) => WarnedResult::Ok(pacman_dt),
         (Err(e1), Err(e2)) => WarnedResult::Err(anyhow!("Errors determining last update, {e1}, {e2}"))
     }
 }
@@ -92,7 +97,9 @@ pub async fn set_local_last_read(
         .await
         .context("Error writing last read to disk")
 }
-async fn get_local_last_read(platform: &impl ArchInstallation) -> anyhow::Result<DateTime<Local>> {
+async fn get_local_last_read(
+    platform: &impl ArchInstallation,
+) -> anyhow::Result<DateTime<FixedOffset>> {
     let mut last_read_string = String::new();
     platform
         .get_local_storage_reader()
@@ -103,20 +110,22 @@ async fn get_local_last_read(platform: &impl ArchInstallation) -> anyhow::Result
         .context("Error converting last read file to string")?;
     let date_time =
         DateTime::parse_from_rfc3339(&last_read_string).context("Error parsing last read file")?;
-    Ok(DateTime::<Local>::from(date_time))
+    Ok(date_time)
 }
 async fn get_latest_pacman_update(
     platform: &impl ArchInstallation,
-) -> anyhow::Result<DateTime<Local>> {
+) -> anyhow::Result<Option<DateTime<FixedOffset>>> {
     let log = &platform
         .get_pacman_log()
         .await
         .context("Error reading pacman log")?;
-    let last_update_line = log
+    let Some(last_update_line) = log
         .lines()
         .filter(|line| line.contains("starting full system upgrade"))
         .last()
-        .context("Error parsing pacman log")?;
+    else {
+        return Ok(None);
+    };
     let last_update_str = last_update_line
         .trim_start_matches('[')
         .split(']')
@@ -125,7 +134,7 @@ async fn get_latest_pacman_update(
     let naive_datetime = DateTime::parse_from_str(last_update_str, "%Y-%m-%dT%H:%M:%S%z").context(
         format!("Error parsing pacman log timestamp '{}'", last_update_str),
     )?;
-    Ok(DateTime::<Local>::from(naive_datetime))
+    Ok(Some(naive_datetime))
 }
 #[cfg(test)]
 mod tests {
@@ -141,7 +150,7 @@ mod tests {
         mock.expect_get_pacman_log()
             .returning(|| Ok(include_str!("../../test/pacman.log").to_string()));
         assert_eq!(
-            get_latest_pacman_update(&mock).await.unwrap(),
+            get_latest_pacman_update(&mock).await.unwrap().unwrap(),
             chrono::FixedOffset::east_opt(8 * 60 * 60)
                 .unwrap()
                 .with_ymd_and_hms(2024, 2, 5, 22, 2, 13)
@@ -154,7 +163,7 @@ mod tests {
         mock.expect_get_pacman_log()
             .returning(|| Ok(include_str!("../../test/pacman-no-update.log").to_string()));
         assert_eq!(
-            get_latest_pacman_update(&mock).await.unwrap(),
+            get_latest_pacman_update(&mock).await.unwrap().unwrap(),
             chrono::FixedOffset::east_opt(8 * 60 * 60)
                 .unwrap()
                 .with_ymd_and_hms(2024, 2, 5, 22, 2, 13)

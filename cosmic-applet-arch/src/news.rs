@@ -37,7 +37,8 @@ pub async fn set_news_last_read(dt: chrono::DateTime<FixedOffset>) -> Result<()>
     latest_update::set_local_last_read(&Arch, dt).await
 }
 
-/// Represents a Result with a 3rd state, Warning, that allows you to access the inner value but also a warning for it.
+/// Represents a Result with a 3rd state, Warning, that allows you to access the
+/// inner value but also a warning for it.
 pub enum WarnedResult<T, W, E> {
     Ok(T),
     Warning(T, W),
@@ -45,6 +46,12 @@ pub enum WarnedResult<T, W, E> {
 }
 
 impl<T, W, E> WarnedResult<T, W, E> {
+    pub fn from_result(r: Result<T, E>) -> Self {
+        match r {
+            Ok(t) => WarnedResult::Ok(t),
+            Err(e) => WarnedResult::Err(e),
+        }
+    }
     pub fn map<U>(self, f: impl FnOnce(T) -> U) -> WarnedResult<U, W, E> {
         match self {
             WarnedResult::Ok(t) => WarnedResult::Ok(f(t)),
