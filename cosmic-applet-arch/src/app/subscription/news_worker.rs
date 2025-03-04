@@ -68,6 +68,7 @@ pub async fn raw_news_worker(
                     if let Err(e) = set_news_last_read(residual.time.into()).await {
                         // For now, this is just a console warning.
                         eprintln!("WARN: Error storing local cache {e}");
+                        todo!("Send clearing error to app, and don't reset the error until when?");
                     }
                 } else {
                     eprintln!("WARN: User cleared news before it had been checked online - shouldn't be possible!");

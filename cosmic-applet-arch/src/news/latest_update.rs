@@ -31,11 +31,15 @@ impl ArchInstallation for Arch {
     async fn get_local_storage_writer(
         &self,
     ) -> std::io::Result<Box<dyn AsyncWrite + Unpin + Send>> {
+        let path = platform_local_last_read_path()?;
+        if let Some(parent) = path.parent() {
+            tokio::fs::create_dir_all(parent).await?;
+        }
         tokio::fs::File::options()
             .create(true)
             .truncate(true)
             .write(true)
-            .open(platform_local_last_read_path()?)
+            .open(path)
             .await
             .map(to_box_writer)
     }
