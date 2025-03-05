@@ -4,9 +4,9 @@ updates-available = { $numberUpdates ->
    *[other] { $numberUpdates } { $updateSource } updates available
 }
 news = News since last update - Click to clear
+no-news = No news since last update.
 no-updates-available = No updates available.
 loading = Loading...
 last-checked = Last checked: { $dateTime } - Click to refresh
 warning-error = Warning: { $error }!!
 n-more = ...and { $n } more.
-no-news = No news since last updated or cleared.

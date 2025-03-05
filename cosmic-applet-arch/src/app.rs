@@ -279,6 +279,7 @@ impl CosmicAppletArch {
                 last_checked_online,
             },
         };
+        self.clear_news_pressed_notifier.notify_one();
         Task::none()
     }
     fn handle_clear_news_error_msg(&mut self, e: String) -> Task<Message> {
@@ -297,8 +298,8 @@ impl CosmicAppletArch {
                 last_checked_online,
                 error: e,
             },
-            _ => {
-                eprintln!("ERROR: Recieved an error message that I was unable to clear news, but I wassn't clearing news");
+            ref s => {
+                eprintln!("WARNING: Recieved an error message that I was unable to clear news, but I wasn't clearing news. State: {:?}", s);
                 old_news
             }
         };

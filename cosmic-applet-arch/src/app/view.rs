@@ -32,6 +32,7 @@ pub enum AppIcon {
     Loading,
     Error,
     UpdatesAvailable,
+    NewsAvailable,
     UpToDate,
 }
 
@@ -42,6 +43,7 @@ impl AppIcon {
             AppIcon::UpToDate => "emblem-default-symbolic",
             AppIcon::Loading => "emblem-synchronizing-symbolic",
             AppIcon::Error => "dialog-error-symbolic",
+            AppIcon::NewsAvailable => "mail-message-new-symbolic",
         }
     }
 }
@@ -59,6 +61,25 @@ pub fn view(app: &CosmicAppletArch) -> Element<Message> {
                 AppIcon::UpToDate
             } else {
                 AppIcon::UpdatesAvailable
+            }
+        }
+    };
+    let additional_icon = match &app.news {
+        NewsState::Init | NewsState::InitError { .. } => None,
+        NewsState::Received { value: news, .. }
+        | NewsState::Clearing {
+            last_value: news, ..
+        }
+        | NewsState::ClearingError {
+            last_value: news, ..
+        }
+        | NewsState::Error {
+            last_value: news, ..
+        } => {
+            if !news.is_empty() {
+                Some(AppIcon::NewsAvailable)
+            } else {
+                None
             }
         }
     };
@@ -85,8 +106,13 @@ pub fn view(app: &CosmicAppletArch) -> Element<Message> {
     // others.
     cosmic::widget::autosize::autosize(
         if total_updates > 0 {
-            applet_button_with_text(app.core(), icon.to_str(), format!("{total_updates}"))
-                .on_press_down(Message::TogglePopup)
+            applet_button_with_text(
+                app.core(),
+                icon,
+                additional_icon,
+                format!("{total_updates}"),
+            )
+            .on_press_down(Message::TogglePopup)
         } else {
             app.core
                 .applet
@@ -98,21 +124,15 @@ pub fn view(app: &CosmicAppletArch) -> Element<Message> {
     .into()
 }
 
-// Extension of applet context icon_button_from_handle function.
-pub fn applet_button_with_text<'a, Message: 'static>(
-    core: &Core,
-    icon_name: impl AsRef<str>,
-    text: impl Into<Cow<'a, str>>,
-) -> cosmic::widget::Button<'a, Message> {
+pub fn applet_icon(core: &Core, icon_type: AppIcon) -> cosmic::widget::Icon {
     // Hardcode to symbolic = true.
     let suggested = core.applet.suggested_size(true);
-    let (configured_width, _) = core.applet.suggested_window_size();
 
-    let icon = cosmic::widget::icon::from_name(icon_name.as_ref())
+    let icon = cosmic::widget::icon::from_name(icon_type.to_str())
         .symbolic(true)
         .size(suggested.0)
         .into();
-    let icon = cosmic::widget::icon(icon)
+    cosmic::widget::icon(icon)
         .class(cosmic::theme::Svg::Custom(Rc::new(|theme| {
             cosmic::widget::svg::Style {
                 color: Some(theme.cosmic().background.on.into()),
@@ -120,7 +140,19 @@ pub fn applet_button_with_text<'a, Message: 'static>(
         })))
         .width(Length::Fixed(suggested.0 as f32))
         .height(Length::Fixed(suggested.1 as f32))
-        .into();
+}
+
+// Extension of applet context icon_button_from_handle function.
+pub fn applet_button_with_text<'a, Message: 'static>(
+    core: &Core,
+    icon: AppIcon,
+    additional_icon: Option<AppIcon>,
+    text: impl Into<Cow<'a, str>>,
+) -> cosmic::widget::Button<'a, Message> {
+    let (configured_width, _) = core.applet.suggested_window_size();
+
+    let icon = applet_icon(core, icon);
+    let additional_icon = additional_icon.map(|additional_icon| applet_icon(core, additional_icon));
     let text = core
         .applet
         .text(text)
@@ -129,13 +161,15 @@ pub fn applet_button_with_text<'a, Message: 'static>(
     // TODO: handle text overflow when vertical.
     let container = if core.applet.is_horizontal() {
         cosmic::widget::layer_container(
-            cosmic::widget::row::with_children(vec![icon, text.into()])
+            cosmic::widget::row::with_children(vec![icon.into(), text.into()])
+                .push_maybe(additional_icon)
                 .align_y(cosmic::iced::Alignment::Center)
                 .spacing(2),
         )
     } else {
         cosmic::widget::layer_container(
-            cosmic::widget::column::with_children(vec![icon, text.into()])
+            cosmic::widget::column::with_children(vec![icon.into(), text.into()])
+                .push_maybe(additional_icon)
                 .align_x(cosmic::iced::Alignment::Center)
                 .max_width(configured_width.get() as f32)
                 .spacing(2),
