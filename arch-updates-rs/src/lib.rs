@@ -80,6 +80,8 @@ pub enum Error {
     GetAurPackageFailed(Option<String>),
     #[error("Error parsing .SRCINFO")]
     ParseErrorSrcinfo(#[from] srcinfo::Error),
+    #[error("checkupdates returned an error: `{0}`")]
+    CheckUpdatesReturnedError(String),
     #[error("Failed to parse update from checkupdates string: `{0}`")]
     ParseErrorCheckUpdates(String),
     #[error("Failed to parse update from pacman string: `{0}`")]
@@ -156,6 +158,11 @@ pub async fn check_pacman_updates_online() -> Result<(Vec<PacmanUpdate>, PacmanU
             .arg("--nocolor")
             .output()
             .await?;
+        // Guard against stderr from checkupdates.
+        let stderr = str::from_utf8(output.stderr.as_slice())?;
+        if !stderr.is_empty() {
+            return Err(Error::CheckUpdatesReturnedError(stderr.to_owned()));
+        };
         str::from_utf8(output.stdout.as_slice())?
             .lines()
             .map(parse_update)
@@ -225,9 +232,16 @@ pub async fn check_pacman_updates_offline(cache: &PacmanUpdatesCache) -> Result<
 pub async fn check_devel_updates_online() -> Result<(Vec<DevelUpdate>, DevelUpdatesCache)> {
     let devel_packages = get_devel_packages().await?;
     let devel_updates = futures::stream::iter(devel_packages.into_iter())
+        // Get the SRCINFO for each package (as Result<Option<_>>).
         .then(|pkg| async move {
-            let updates = get_aur_srcinfo(&pkg.pkgname)
-                .await?
+            let srcinfo = get_aur_srcinfo(&pkg.pkgname).await;
+            (pkg, srcinfo)
+        })
+        // Remove any None values from the list - these are where the aurweb
+        // api call was succesful but the package wasn't found (ie, package is not an AUR package).
+        .filter_map(|(pkg, maybe_srcinfo)| async { Some((pkg, maybe_srcinfo.transpose()?)) })
+        .then(|(pkg, srcinfo)| async move {
+            let updates = srcinfo?
                 .base
                 .source
                 .into_iter()
