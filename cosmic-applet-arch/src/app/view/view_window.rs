@@ -2,8 +2,7 @@ use crate::{app::Message, app::UpdatesState, CosmicAppletArch};
 use crate::{
     app::{
         view::{
-            cosmic_applet_divider, cosmic_body_text_row, errors_row_widget, news_available_widget,
-            news_list_widget, updates_available_widget, AppIcon, DisplayPackage, MAX_NEWS_LINES,
+            cosmic_applet_divider, cosmic_body_text_row, errors_row_widget, news_available_widget, updates_available_widget, AppIcon, DisplayPackage, MAX_NEWS_LINES,
             MAX_UPDATE_LINES,
         },
         NewsState,

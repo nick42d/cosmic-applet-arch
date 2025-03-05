@@ -1,8 +1,4 @@
-use crate::{
-    app::{CosmicAppletArch, Message, NewsState, UpdatesState},
-    fl,
-};
-use chrono::{DateTime, Local};
+use crate::app::{CosmicAppletArch, Message, NewsState, UpdatesState};
 use cosmic::widget::Id;
 use cosmic::{
     app::Core,
@@ -10,7 +6,7 @@ use cosmic::{
         alignment::{Horizontal, Vertical},
         Length,
     },
-    theme::{self, Button},
+    theme::{Button},
     Application, Element,
 };
 use std::borrow::Cow;
