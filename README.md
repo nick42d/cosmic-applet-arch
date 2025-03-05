@@ -2,7 +2,7 @@
 COSMIC Applet to display Arch Linux package status.
 Inspired by https://github.com/savely-krasovsky/waybar-updates and https://github.com/RaphaelRochet/arch-update.
 
-![image](https://github.com/user-attachments/assets/61d0e2af-4036-4dd9-948c-55833f0f8230)
+![scn](https://github.com/user-attachments/assets/69c49436-226f-4349-afae-94d34694d565)
 
 # arch_updates_rs - Arch updates API
 Please refer to `arch-updates-rs/README.md` for more information.
@@ -14,6 +14,7 @@ Please refer to `arch-updates-rs/README.md` for more information.
 ## Features
  - Native COSMIC look and feel, supporting both light and dark mode.
  - pacman, AUR, and devel package upgrades shown.
+ - Latest news from Arch news feed show (all news after last full system upgrade).
  - Set up to support localisation - to support your language please submit your `.ftl` translations to the `./cosmic-applet-arch/i18n/` directory.
  - Modular API `arch-updates-rs` - able to be used in other similar projects.
 
