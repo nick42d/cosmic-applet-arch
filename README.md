@@ -15,6 +15,7 @@ Please refer to `arch-updates-rs/README.md` for more information.
  - Native COSMIC look and feel, supporting both light and dark mode.
  - pacman, AUR, and devel package upgrades shown.
  - Latest news from Arch news feed show (all news after last full system upgrade).
+ - Package upgrades and news feed are clickable taking you to associated web page.
  - Set up to support localisation - to support your language please submit your `.ftl` translations to the `./cosmic-applet-arch/i18n/` directory.
  - Modular API `arch-updates-rs` - able to be used in other similar projects.
 
