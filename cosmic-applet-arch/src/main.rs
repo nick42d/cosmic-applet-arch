@@ -4,6 +4,7 @@
 /// application.
 mod app;
 mod core;
+mod news;
 
 use app::CosmicAppletArch;
 
