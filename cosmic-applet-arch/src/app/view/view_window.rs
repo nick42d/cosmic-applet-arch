@@ -1,9 +1,10 @@
-use super::{CosmicAppletArch, Message, UpdatesState};
+use crate::{app::Message, app::UpdatesState, CosmicAppletArch};
 use crate::{
     app::{
         view::{
-            body_text_row, cosmic_applet_divider, errors_row_widget, news_list_widget,
-            updates_available_widget, AppIcon, DisplayPackage, MAX_NEWS_LINES, MAX_UPDATE_LINES,
+            cosmic_applet_divider, cosmic_body_text_row, errors_row_widget, news_available_widget,
+            news_list_widget, updates_available_widget, AppIcon, DisplayPackage, MAX_NEWS_LINES,
+            MAX_UPDATE_LINES,
         },
         NewsState,
     },
@@ -51,7 +52,7 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
         app.updates,
         UpdatesState::Init | UpdatesState::InitError { .. }
     ) {
-        Some(body_text_row(fl!("loading")))
+        Some(cosmic_body_text_row(fl!("loading")))
     } else {
         None
     };
@@ -118,63 +119,41 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
         MAX_UPDATE_LINES,
     );
     let mut news_error_row = None;
-    todo!("News row should be different, if there isn't any news!");
     let news_row = match &app.news {
         NewsState::Init => None,
         NewsState::InitError { error } => Some(errors_row_widget(error)),
         NewsState::Received {
             last_checked_online,
             value,
-        } => Some(
-            cosmic::iced_widget::column![
-                cosmic::applet::menu_button(cosmic::widget::text::body(fl!("news")))
-                    .on_press(Message::ClearNewsMsg),
-                news_list_widget(value.iter(), MAX_NEWS_LINES, space_xxs)
-            ]
-            .into(),
-        ),
+        } => Some(news_available_widget(value.iter(), None, MAX_NEWS_LINES)),
         NewsState::Clearing {
             last_value,
             last_checked_online,
-        } => Some(
-            cosmic::iced_widget::column![
-                cosmic::applet::menu_button(cosmic::iced_widget::row![
-                    cosmic::widget::icon::from_name(AppIcon::Loading.to_str()),
-                    cosmic::widget::text::body(fl!("news"))
-                ])
-                .on_press(Message::ClearNewsMsg),
-                news_list_widget(last_value.iter(), MAX_NEWS_LINES, space_xxs)
-            ]
-            .into(),
-        ),
+        } => Some(news_available_widget(
+            last_value.iter(),
+            Some(AppIcon::Loading),
+            MAX_NEWS_LINES,
+        )),
         NewsState::ClearingError {
             last_value,
             last_checked_online,
-        } => Some(
-            cosmic::iced_widget::column![
-                cosmic::applet::menu_button(cosmic::iced_widget::row![
-                    cosmic::widget::icon::from_name(AppIcon::Error.to_str()),
-                    cosmic::widget::text::body(fl!("news"))
-                ])
-                .on_press(Message::ClearNewsMsg),
-                news_list_widget(last_value.iter(), MAX_NEWS_LINES, space_xxs)
-            ]
-            .into(),
-        ),
+            error,
+        } => Some(news_available_widget(
+            last_value.iter(),
+            Some(AppIcon::Error),
+            MAX_NEWS_LINES,
+        )),
         NewsState::Error {
             last_value,
             error,
             last_checked_online,
         } => {
             news_error_row = Some(errors_row_widget(error));
-            Some(
-                cosmic::iced_widget::column![
-                    cosmic::applet::menu_button(cosmic::widget::text::body(fl!("news")))
-                        .on_press(Message::ClearNewsMsg),
-                    news_list_widget(last_value.iter(), MAX_NEWS_LINES, space_xxs)
-                ]
-                .into(),
-            )
+            Some(news_available_widget(
+                last_value.iter(),
+                None,
+                MAX_NEWS_LINES,
+            ))
         }
     };
     let news_divider =
@@ -191,7 +170,9 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
         .push_maybe((aur > 0).then_some(aur_list))
         .push_maybe((dev > 0 && pm + aur > 0).then_some(cosmic_applet_divider(space_s).into()))
         .push_maybe((dev > 0).then_some(devel_list))
-        .push_maybe((total_updates == 0).then_some(body_text_row(fl!("no-updates-available"))))
+        .push_maybe(
+            (total_updates == 0).then_some(cosmic_body_text_row(fl!("no-updates-available"))),
+        )
         .push(cosmic_applet_divider(space_s).into())
         .push_maybe(last_checked_row)
         .push_maybe(loading_row)

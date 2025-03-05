@@ -3,6 +3,7 @@ use super::{Message, CYCLES};
 use crate::app::subscription::core::{
     consume_warning, flat_erased_timeout, get_news_offline, CheckType, OnlineNewsResidual,
 };
+use crate::app::subscription::messages_to_app::send_news_clearing_error;
 use crate::app::{INTERVAL, TIMEOUT};
 use crate::news::{get_news_online, set_news_last_read};
 use chrono::Local;
@@ -66,9 +67,9 @@ pub async fn raw_news_worker(
                 // Don't allow user to clear news if we haven't checked online yet (shouldn't be literally possible...)
                 if let Some(residual) = residual {
                     if let Err(e) = set_news_last_read(residual.time.into()).await {
-                        // For now, this is just a console warning.
                         eprintln!("WARN: Error storing local cache {e}");
-                        todo!("Send clearing error to app, and don't reset the error until when?");
+                        // Note - this will only temporarily show to the user, until the online check below has been performed.
+                        send_news_clearing_error(&mut tx, e).await;
                     }
                 } else {
                     eprintln!("WARN: User cleared news before it had been checked online - shouldn't be possible!");

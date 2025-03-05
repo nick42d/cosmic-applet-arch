@@ -77,6 +77,7 @@ pub enum NewsState {
     },
     ClearingError {
         last_checked_online: chrono::DateTime<Local>,
+        error: String,
         last_value: Vec<DatedNewsItem>,
     },
     Error {
@@ -102,6 +103,7 @@ pub enum Message {
     },
     CheckNewsErrorsMsg(String),
     ClearNewsMsg,
+    ClearNewsErrorMsg(String),
     CheckUpdatesErrorsMsg {
         error_string: String,
     },
@@ -151,7 +153,7 @@ impl Application for CosmicAppletArch {
     }
     // view is what is displayed in the toolbar when run as an applet.
     fn view(&self) -> Element<Self::Message> {
-        view::view::view(self)
+        view::view(self)
     }
     // view_window is what is displayed in the popup.
     fn view_window(&self, id: Id) -> Element<Self::Message> {
@@ -179,6 +181,7 @@ impl Application for CosmicAppletArch {
             } => self.handle_check_news_msg(news, checked_online_time),
             Message::CheckNewsErrorsMsg(e) => self.handle_check_news_errors_msg(e),
             Message::ClearNewsMsg => self.handle_clear_news_msg(),
+            Message::ClearNewsErrorMsg(e) => self.handle_clear_news_error_msg(e),
         }
     }
     // Long running stream of messages to the app.
@@ -220,6 +223,7 @@ impl CosmicAppletArch {
             | NewsState::ClearingError {
                 last_value,
                 last_checked_online,
+                error: _,
             } => NewsState::Error {
                 last_value,
                 error: e,
@@ -261,20 +265,43 @@ impl CosmicAppletArch {
             NewsState::ClearingError {
                 last_value,
                 last_checked_online,
+                error: _,
             } => NewsState::Clearing {
                 last_value,
                 last_checked_online,
             },
             NewsState::Error {
                 last_value,
-                error,
+                error: _,
                 last_checked_online,
             } => NewsState::Clearing {
                 last_value,
                 last_checked_online,
             },
         };
-        self.clear_news_pressed_notifier.notify_one();
+        Task::none()
+    }
+    fn handle_clear_news_error_msg(&mut self, e: String) -> Task<Message> {
+        let old_news = std::mem::take(&mut self.news);
+        self.news = match old_news {
+            NewsState::Clearing {
+                last_value,
+                last_checked_online,
+            }
+            | NewsState::ClearingError {
+                last_checked_online,
+                last_value,
+                error: _,
+            } => NewsState::ClearingError {
+                last_value,
+                last_checked_online,
+                error: e,
+            },
+            _ => {
+                eprintln!("ERROR: Recieved an error message that I was unable to clear news, but I wassn't clearing news");
+                old_news
+            }
+        };
         Task::none()
     }
     fn handle_open_url(&self, url: String) -> Task<Message> {

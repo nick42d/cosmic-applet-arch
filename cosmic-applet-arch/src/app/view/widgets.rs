@@ -1,5 +1,5 @@
-use super::Message;
-use crate::{fl, news::DatedNewsItem};
+use super::AppIcon;
+use crate::{app::Message, fl, news::DatedNewsItem};
 use arch_updates_rs::{AurUpdate, DevelUpdate, PacmanUpdate, SourceRepo};
 use cosmic::{
     iced::{
@@ -35,7 +35,7 @@ pub fn cosmic_applet_divider(
         .padding([0, spacing])
 }
 
-pub fn body_text_row(text: String) -> Element<'static, Message> {
+pub fn cosmic_body_text_row(text: String) -> Element<'static, Message> {
     cosmic::widget::container(
         cosmic::widget::text::body(text)
             .width(Length::Fill)
@@ -92,14 +92,35 @@ fn cosmic_collapsible_row_widget<'a>(
 
 pub fn news_available_widget<'a>(
     news_list: impl ExactSizeIterator<Item = &'a DatedNewsItem> + 'a,
-    collapsed: &Collapsed,
-    title: String,
-    on_press_mesage: Message,
-    max_items: usize,
+    icon: Option<AppIcon>,
+    max_news_lines: usize,
 ) -> Element<'a, Message> {
     let cosmic::cosmic_theme::Spacing { space_xxs, .. } = theme::active().cosmic().spacing;
-    let children = news_list_widget(news_list, max_items, space_xxs);
-    cosmic_collapsible_row_widget(children, collapsed, title, on_press_mesage)
+    match news_list.len() {
+        0 => cosmic_body_text_row(fl!("no-news")),
+        _ => {
+            let news_header = |element: Element<'a, Message>| {
+                cosmic::applet::menu_button(element).on_press(Message::ClearNewsMsg)
+            };
+            let news_header_text = cosmic::widget::text::body(fl!("news"));
+            let news_header = match icon {
+                Some(icon) => news_header(
+                    cosmic::iced_widget::row![
+                        cosmic::widget::icon::from_name(icon.to_str()),
+                        news_header_text
+                    ]
+                    .spacing(space_xxs)
+                    .into(),
+                ),
+                None => news_header(news_header_text.into()),
+            };
+            cosmic::iced_widget::column![
+                news_header,
+                news_list_widget(news_list, max_news_lines, space_xxs)
+            ]
+            .into()
+        }
+    }
 }
 
 pub fn updates_available_widget<'a>(
