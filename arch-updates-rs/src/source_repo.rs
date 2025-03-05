@@ -9,7 +9,7 @@ use std::{collections::HashMap, fmt::Display};
 pub type SourcesList = HashMap<String, SourceRepo>;
 
 /// Source of a package.
-/// https://wiki.archlinux.org/title/Official_repositories
+/// <https://wiki.archlinux.org/title/Official_repositories>
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SourceRepo {
     Core,
@@ -21,7 +21,7 @@ pub enum SourceRepo {
     GnomeUnstable,
     KdeUnstable,
     /// Other comprises packages in an unofficial user repository
-    /// e.g. https://wiki.archlinux.org/title/Unofficial_user_repositories or endeavouros/manjaro repositories.
+    /// e.g. <https://wiki.archlinux.org/title/Unofficial_user_repositories> or endeavouros/manjaro repositories.
     Other(String),
 }
 
