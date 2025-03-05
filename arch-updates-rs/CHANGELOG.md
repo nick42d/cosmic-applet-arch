@@ -11,10 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.2.0](https://github.com/nick42d/cosmic-applet-arch/compare/arch-updates-rs/v0.1.2...arch-updates-rs/v0.2.0) - 2025-03-05
 
 ### Added
-- Show latest news from Arch rss feed ([#9](https://github.com/nick42d/cosmic-applet-arch/pull/9))
-- Ability to open AUR page as hyperlink - closes #5 ([#6](https://github.com/nick42d/cosmic-applet-arch/pull/6))
+- BREAKING CHANGE: Pacman updates now provide SourceRepo. Impact: Update struct split into AurUpdate and PacmanUpdate, check_pacman_updates now uses cache, and a new error variant is added. ([#6](https://github.com/nick42d/cosmic-applet-arch/pull/6))
 
 ### Fixed
 - not finding a manually installed package ending with DEVEL_SUFFIXES shouldn't panic, closes #11 ([#12](https://github.com/nick42d/cosmic-applet-arch/pull/12))
+- removed an unnecessary unwrap
 
 
