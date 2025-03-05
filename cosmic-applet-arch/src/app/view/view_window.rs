@@ -53,7 +53,7 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
     };
     let errors_row = match &app.updates {
         UpdatesState::InitError { error } => Some(errors_row_widget(error)),
-        // TODO: This should be a special case where the error is pressable.
+        // NOTE: This could be a special case where the error is pressable.
         UpdatesState::Error { error, .. } => Some(errors_row_widget(error)),
         UpdatesState::Init | UpdatesState::Received { .. } => None,
     };
