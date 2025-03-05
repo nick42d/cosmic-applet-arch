@@ -48,8 +48,8 @@ pub async fn send_news_error(tx: &mut mpsc::Sender<Message>, e: impl std::fmt::D
             eprintln!("Error {e} sending Arch news status - maybe the applet has been dropped.")
         });
 }
-pub async fn send_news_clearing_error(tx: &mut mpsc::Sender<Message>, e: impl std::fmt::Display) {
-    tx.send(Message::ClearNewsErrorMsg(format!("{e}")))
+pub async fn send_news_clearing_error(tx: &mut mpsc::Sender<Message>) {
+    tx.send(Message::ClearNewsErrorMsg)
         .await
         .unwrap_or_else(|e| {
             eprintln!("Error {e} sending Arch news status - maybe the applet has been dropped.")

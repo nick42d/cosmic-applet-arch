@@ -6,7 +6,7 @@ use cosmic::{
         alignment::{Horizontal, Vertical},
         Length,
     },
-    theme::{Button},
+    theme::Button,
     Application, Element,
 };
 use std::borrow::Cow;
@@ -49,10 +49,7 @@ pub fn view(app: &CosmicAppletArch) -> Element<Message> {
     let icon = match &app.updates {
         UpdatesState::Init => AppIcon::Loading,
         UpdatesState::InitError { .. } | UpdatesState::Error { .. } => AppIcon::Error,
-        UpdatesState::Received { value, .. }
-        | UpdatesState::Refreshing {
-            last_value: value, ..
-        } => {
+        UpdatesState::Received { value, .. } => {
             if value.total() == 0 {
                 AppIcon::UpToDate
             } else {
@@ -81,12 +78,7 @@ pub fn view(app: &CosmicAppletArch) -> Element<Message> {
     };
     // Seemed like I couldn't use a let-else here but I assume it will be possible
     // in future.
-    let updates = if let UpdatesState::Received { value: updates, .. }
-    | UpdatesState::Refreshing {
-        last_value: updates,
-        ..
-    } = &app.updates
-    {
+    let updates = if let UpdatesState::Received { value: updates, .. } = &app.updates {
         updates
     } else {
         return app

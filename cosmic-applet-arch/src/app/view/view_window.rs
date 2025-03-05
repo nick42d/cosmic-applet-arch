@@ -2,8 +2,8 @@ use crate::{app::Message, app::UpdatesState, CosmicAppletArch};
 use crate::{
     app::{
         view::{
-            cosmic_applet_divider, cosmic_body_text_row, errors_row_widget, news_available_widget, updates_available_widget, AppIcon, DisplayPackage, MAX_NEWS_LINES,
-            MAX_UPDATE_LINES,
+            cosmic_applet_divider, cosmic_body_text_row, errors_row_widget, news_available_widget,
+            updates_available_widget, AppIcon, DisplayPackage, MAX_NEWS_LINES, MAX_UPDATE_LINES,
         },
         NewsState,
     },
@@ -33,10 +33,6 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
             last_checked_online,
             ..
         }
-        | UpdatesState::Refreshing {
-            last_checked_online,
-            ..
-        }
         | UpdatesState::Error {
             last_checked_online,
             ..
@@ -59,14 +55,11 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
         UpdatesState::InitError { error } => Some(errors_row_widget(error)),
         // TODO: This should be a special case where the error is pressable.
         UpdatesState::Error { error, .. } => Some(errors_row_widget(error)),
-        UpdatesState::Init | UpdatesState::Received { .. } | UpdatesState::Refreshing { .. } => {
-            None
-        }
+        UpdatesState::Init | UpdatesState::Received { .. } => None,
     };
 
     let updates = match &app.updates {
         UpdatesState::Received { value, .. } => value,
-        UpdatesState::Refreshing { last_value, .. } => last_value,
         UpdatesState::Error { last_value, .. } => last_value,
         UpdatesState::Init | UpdatesState::InitError { .. } => {
             let content_list = content_list
@@ -92,7 +85,7 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
             numberUpdates = pm,
             updateSource = "pacman"
         ),
-        Message::ToggleCollapsible(crate::app::CollapsibleType::PacmanUpdates),
+        Message::ToggleCollapsible(crate::app::CollapsibleType::Pacman),
         MAX_UPDATE_LINES,
     );
     let aur_list = updates_available_widget(
@@ -103,7 +96,7 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
             numberUpdates = aur,
             updateSource = "AUR"
         ),
-        Message::ToggleCollapsible(crate::app::CollapsibleType::AurUpdates),
+        Message::ToggleCollapsible(crate::app::CollapsibleType::Aur),
         MAX_UPDATE_LINES,
     );
     let devel_list = updates_available_widget(
@@ -114,38 +107,28 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
             numberUpdates = dev,
             updateSource = "devel"
         ),
-        Message::ToggleCollapsible(crate::app::CollapsibleType::DevelUpdates),
+        Message::ToggleCollapsible(crate::app::CollapsibleType::Devel),
         MAX_UPDATE_LINES,
     );
     let mut news_error_row = None;
     let news_row = match &app.news {
         NewsState::Init => None,
         NewsState::InitError { error } => Some(errors_row_widget(error)),
-        NewsState::Received {
-            last_checked_online,
-            value,
-        } => Some(news_available_widget(value.iter(), None, MAX_NEWS_LINES)),
-        NewsState::Clearing {
-            last_value,
-            last_checked_online,
-        } => Some(news_available_widget(
+        NewsState::Received { value, .. } => {
+            Some(news_available_widget(value.iter(), None, MAX_NEWS_LINES))
+        }
+        NewsState::Clearing { last_value, .. } => Some(news_available_widget(
             last_value.iter(),
             Some(AppIcon::Loading),
             MAX_NEWS_LINES,
         )),
-        NewsState::ClearingError {
-            last_value,
-            last_checked_online,
-            error,
-        } => Some(news_available_widget(
+        NewsState::ClearingError { last_value, .. } => Some(news_available_widget(
             last_value.iter(),
             Some(AppIcon::Error),
             MAX_NEWS_LINES,
         )),
         NewsState::Error {
-            last_value,
-            error,
-            last_checked_online,
+            last_value, error, ..
         } => {
             news_error_row = Some(errors_row_widget(error));
             Some(news_available_widget(

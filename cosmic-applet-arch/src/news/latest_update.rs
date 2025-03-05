@@ -10,7 +10,7 @@ const PACMAN_LOG_PATH: &str = "/var/log/pacman.log";
 const LOCAL_LAST_READ_PATH: &str = "last_read";
 
 #[cfg_attr(test, mockall::automock)]
-trait ArchInstallation {
+pub trait ArchInstallation {
     async fn get_pacman_log(&self) -> std::io::Result<String>;
     /// Note - should be provided in RW mode.
     async fn get_local_storage_reader(&self) -> std::io::Result<Box<dyn AsyncRead + Send + Unpin>>;
@@ -206,8 +206,7 @@ mod tests {
             chrono::FixedOffset::east_opt(8 * 60 * 60)
                 .unwrap()
                 .with_ymd_and_hms(2025, 2, 3, 11, 24, 25)
-                .unwrap()
-                .into(),
+                .unwrap(),
         )
         .await
         .unwrap();

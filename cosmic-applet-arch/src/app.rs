@@ -49,10 +49,6 @@ pub enum UpdatesState {
         last_checked_online: chrono::DateTime<Local>,
         value: Updates,
     },
-    Refreshing {
-        last_checked_online: chrono::DateTime<Local>,
-        last_value: Updates,
-    },
     Error {
         last_checked_online: chrono::DateTime<Local>,
         last_value: Updates,
@@ -77,7 +73,6 @@ pub enum NewsState {
     },
     ClearingError {
         last_checked_online: chrono::DateTime<Local>,
-        error: String,
         last_value: Vec<DatedNewsItem>,
     },
     Error {
@@ -103,7 +98,7 @@ pub enum Message {
     },
     CheckNewsErrorsMsg(String),
     ClearNewsMsg,
-    ClearNewsErrorMsg(String),
+    ClearNewsErrorMsg,
     CheckUpdatesErrorsMsg {
         error_string: String,
     },
@@ -112,9 +107,9 @@ pub enum Message {
 
 #[derive(Clone, Debug)]
 pub enum CollapsibleType {
-    AurUpdates,
-    PacmanUpdates,
-    DevelUpdates,
+    Aur,
+    Pacman,
+    Devel,
 }
 
 impl Application for CosmicAppletArch {
@@ -181,7 +176,7 @@ impl Application for CosmicAppletArch {
             } => self.handle_check_news_msg(news, checked_online_time),
             Message::CheckNewsErrorsMsg(e) => self.handle_check_news_errors_msg(e),
             Message::ClearNewsMsg => self.handle_clear_news_msg(),
-            Message::ClearNewsErrorMsg(e) => self.handle_clear_news_error_msg(e),
+            Message::ClearNewsErrorMsg => self.handle_clear_news_error_msg(),
         }
     }
     // Long running stream of messages to the app.
@@ -223,7 +218,6 @@ impl CosmicAppletArch {
             | NewsState::ClearingError {
                 last_value,
                 last_checked_online,
-                error: _,
             } => NewsState::Error {
                 last_value,
                 error: e,
@@ -265,7 +259,6 @@ impl CosmicAppletArch {
             NewsState::ClearingError {
                 last_value,
                 last_checked_online,
-                error: _,
             } => NewsState::Clearing {
                 last_value,
                 last_checked_online,
@@ -282,7 +275,7 @@ impl CosmicAppletArch {
         self.clear_news_pressed_notifier.notify_one();
         Task::none()
     }
-    fn handle_clear_news_error_msg(&mut self, e: String) -> Task<Message> {
+    fn handle_clear_news_error_msg(&mut self) -> Task<Message> {
         let old_news = std::mem::take(&mut self.news);
         self.news = match old_news {
             NewsState::Clearing {
@@ -292,11 +285,9 @@ impl CosmicAppletArch {
             | NewsState::ClearingError {
                 last_checked_online,
                 last_value,
-                error: _,
             } => NewsState::ClearingError {
                 last_value,
                 last_checked_online,
-                error: e,
             },
             ref s => {
                 eprintln!("WARNING: Recieved an error message that I was unable to clear news, but I wasn't clearing news. State: {:?}", s);
@@ -339,11 +330,9 @@ impl CosmicAppletArch {
     }
     fn handle_toggle_collapsible(&mut self, update_type: CollapsibleType) -> Task<Message> {
         match update_type {
-            CollapsibleType::AurUpdates => self.aur_list_state = self.aur_list_state.toggle(),
-            CollapsibleType::PacmanUpdates => {
-                self.pacman_list_state = self.pacman_list_state.toggle()
-            }
-            CollapsibleType::DevelUpdates => self.devel_list_state = self.devel_list_state.toggle(),
+            CollapsibleType::Aur => self.aur_list_state = self.aur_list_state.toggle(),
+            CollapsibleType::Pacman => self.pacman_list_state = self.pacman_list_state.toggle(),
+            CollapsibleType::Devel => self.devel_list_state = self.devel_list_state.toggle(),
         }
         Task::none()
     }
@@ -371,11 +360,7 @@ impl CosmicAppletArch {
                 last_value: value,
                 error,
             },
-            UpdatesState::Refreshing {
-                last_checked_online,
-                last_value,
-            }
-            | UpdatesState::Error {
+            UpdatesState::Error {
                 last_checked_online,
                 last_value,
                 ..

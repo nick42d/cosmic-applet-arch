@@ -89,7 +89,7 @@ pub async fn get_news_offline(
 pub async fn get_news_offline(
     cache: &NewsCache,
 ) -> WarnedResult<Vec<DatedNewsItem>, String, anyhow::Error> {
-    crate::news::get_news_offline(&cache).await
+    crate::news::get_news_offline(cache).await
 }
 
 pub async fn get_news_online(

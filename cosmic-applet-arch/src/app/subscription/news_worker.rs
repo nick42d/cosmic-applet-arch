@@ -1,11 +1,12 @@
 use super::messages_to_app::{send_news, send_news_error};
 use super::{Message, CYCLES};
 use crate::app::subscription::core::{
-    consume_warning, flat_erased_timeout, get_news_offline, CheckType, OnlineNewsResidual,
+    consume_warning, flat_erased_timeout, get_news_offline, get_news_online, CheckType,
+    OnlineNewsResidual,
 };
 use crate::app::subscription::messages_to_app::send_news_clearing_error;
 use crate::app::{INTERVAL, TIMEOUT};
-use crate::news::{get_news_online, set_news_last_read};
+use crate::news::set_news_last_read;
 use chrono::Local;
 use cosmic::iced::futures::channel::mpsc;
 use futures::FutureExt;
@@ -69,7 +70,7 @@ pub async fn raw_news_worker(
                     if let Err(e) = set_news_last_read(residual.time.into()).await {
                         eprintln!("WARN: Error storing local cache {e}");
                         // Note - this will only temporarily show to the user, until the online check below has been performed.
-                        send_news_clearing_error(&mut tx, e).await;
+                        send_news_clearing_error(&mut tx).await;
                     }
                 } else {
                     eprintln!("WARN: User cleared news before it had been checked online - shouldn't be possible!");
