@@ -297,7 +297,7 @@ impl CosmicAppletArch {
         Task::none()
     }
     fn handle_open_url(&self, url: String) -> Task<Message> {
-        if let Err(e) = open::that(&url) {
+        if let Err(e) = open::that_detached(&url) {
             eprintln!("Error {e} opening url {url}")
         }
         Task::none()
