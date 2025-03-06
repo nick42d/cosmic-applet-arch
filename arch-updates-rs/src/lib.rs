@@ -355,9 +355,13 @@ pub async fn check_aur_updates_online() -> Result<(Vec<AurUpdate>, AurUpdatesCac
         .map_err(|_| Error::GetAurPackageFailed(None))?
         .into_iter()
         .filter_map(|new| {
-            let matching_old = &old.iter().find(|old| old.pkgname == new.name)?.clone();
-            let (pkgver_new, pkgrel_new) = parse_ver_and_rel(new.version).unwrap();
-            Some(AurUpdate {
+            let matching_old = old.iter().find(|old| old.pkgname == new.name)?.clone();
+            let maybe_old_ver_and_rel = parse_ver_and_rel(new.version);
+            Some((matching_old, maybe_old_ver_and_rel))
+        })
+        .map(|(matching_old, maybe_old_ver_and_rel)| -> Result<_> {
+            let (pkgver_new, pkgrel_new) = maybe_old_ver_and_rel?;
+            Ok(AurUpdate {
                 pkgname: matching_old.pkgname.to_owned(),
                 pkgver_cur: matching_old.pkgver.to_owned(),
                 pkgrel_cur: matching_old.pkgrel.to_owned(),
@@ -365,7 +369,7 @@ pub async fn check_aur_updates_online() -> Result<(Vec<AurUpdate>, AurUpdatesCac
                 pkgrel_new,
             })
         })
-        .collect();
+        .collect::<Result<_>>()?;
     Ok((
         cache
             .iter()

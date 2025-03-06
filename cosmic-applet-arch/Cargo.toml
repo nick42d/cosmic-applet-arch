@@ -1,31 +1,40 @@
 [package]
 name = "cosmic-applet-arch"
-version = "1.0.0-beta.6"
+version = "1.0.0-beta.8"
 edition = "2021"
 license = "GPL-3.0"
-rust-version = "1.80"
+rust-version = "1.85"
 
 [dependencies]
-chrono = "0.4.38"
+chrono = "0.4.39"
 futures = "0.3.31"
-i18n-embed-fl = "0.9.2"
-itertools = "0.13.0"
-open = "5.3.1"
+i18n-embed-fl = "0.9.3"
+itertools = "0.14.0"
+open = "5.3.2"
 rust-embed = "8.5.0"
-tokio = { version = "1.42.0", features = ["full"] }
-serde = { version = "1.0.215", features = ["derive"], optional = true }
+tokio = { version = "1.43.0", features = ["full"] }
+serde = { version = "1.0.217", features = ["derive"], optional = true }
 ron = { version = "0.8.1", optional = true }
+rss = "2.0.11"
+reqwest = { version = "0.12.12", default-features = false, features = [
+  "charset",
+  "http2",
+  "rustls-tls",
+] }
+tokio-stream = { version = "0.1.17", features = ["io-util"] }
+directories = "6.0.0"
+anyhow = "1.0.96"
 
 [dependencies.libcosmic]
 git = "https://github.com/pop-os/libcosmic.git"
 # To keep builds reproducible, libcosmic should be pegged to a rev.
 # This should be updated periodically.
-rev = "43e7213"
+rev = "9426a98"
 default-features = false
 features = ["applet", "tokio", "wayland", "autosize"]
 
 [dependencies.i18n-embed]
-version = "0.14"
+version = "0.15"
 features = ["fluent-system", "desktop-requester"]
 
 [dependencies.arch-updates-rs]
@@ -39,4 +48,8 @@ path = "../arch-updates-rs"
 
 [features]
 # Feature to use mock version of API instead of real version - for testing.
-mock-api = ["serde", "ron"]
+mock-api = ["serde", "ron", "chrono/serde"]
+
+[dev-dependencies]
+mockall = "0.13.1"
+tempfile = "3.17.1"
