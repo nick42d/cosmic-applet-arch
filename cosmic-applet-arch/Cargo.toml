@@ -1,6 +1,6 @@
 [package]
 name = "cosmic-applet-arch"
-version = "1.0.0-beta.8"
+version = "1.0.0-beta.9"
 edition = "2021"
 license = "GPL-3.0"
 rust-version = "1.85"
@@ -16,11 +16,7 @@ tokio = { version = "1.43.0", features = ["full"] }
 serde = { version = "1.0.217", features = ["derive"], optional = true }
 ron = { version = "0.8.1", optional = true }
 rss = "2.0.11"
-reqwest = { version = "0.12.12", default-features = false, features = [
-  "charset",
-  "http2",
-  "rustls-tls",
-] }
+reqwest = "0.12.12"
 tokio-stream = { version = "0.1.17", features = ["io-util"] }
 directories = "6.0.0"
 anyhow = "1.0.96"
