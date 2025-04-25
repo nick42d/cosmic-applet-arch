@@ -42,18 +42,17 @@
 use core::str;
 use futures::{future::try_join, stream::FuturesOrdered, StreamExt, TryStreamExt};
 use get_updates::{
-    aur_update_due, devel_update_due, get_aur_packages, get_aur_srcinfo, get_devel_packages,
-    get_head_identifier, parse_update, parse_url, parse_ver_and_rel, PackageUrl,
+    aur_update_due, checkupdates, devel_update_due, get_aur_packages, get_aur_srcinfo, get_devel_packages, get_head_identifier, parse_update, parse_url, parse_ver_and_rel, CheckupdatesMode, PackageUrl
 };
 use raur::Raur;
 use source_repo::{add_sources_to_updates, get_sources_list, SourcesList};
 use std::{io, str::Utf8Error};
 use thiserror::Error;
-use tokio::process::Command;
 
 mod get_updates;
-pub use source_repo::SourceRepo;
 mod source_repo;
+
+pub use source_repo::SourceRepo;
 
 /// Packages ending with one of the devel suffixes will be checked against the
 /// repository, as well as just the pkgver and pkgrel.
@@ -153,22 +152,7 @@ pub struct DevelUpdatesCache(Vec<DevelUpdate>);
 /// assert!(updates.is_empty());
 /// # };
 pub async fn check_pacman_updates_online() -> Result<(Vec<PacmanUpdate>, PacmanUpdatesCache)> {
-    let parsed_updates = async {
-        let output = Command::new("checkupdates")
-            .arg("--nocolor")
-            .output()
-            .await?;
-        // Guard against stderr from checkupdates.
-        let stderr = str::from_utf8(output.stderr.as_slice())?;
-        if !stderr.is_empty() {
-            return Err(Error::CheckUpdatesReturnedError(stderr.to_owned()));
-        };
-        str::from_utf8(output.stdout.as_slice())?
-            .lines()
-            .map(parse_update)
-            .collect::<Result<Vec<_>>>()
-    };
-    let (parsed_updates, source_info) = try_join(parsed_updates, get_sources_list()).await?;
+    let (parsed_updates, source_info) = try_join(checkupdates(CheckupdatesMode::Sync), get_sources_list()).await?;
     let updates = add_sources_to_updates(parsed_updates, &source_info);
     Ok((updates, PacmanUpdatesCache(source_info)))
 }
@@ -193,14 +177,7 @@ pub async fn check_pacman_updates_online() -> Result<(Vec<PacmanUpdate>, PacmanU
 /// assert!(offline.is_empty());
 /// # };
 pub async fn check_pacman_updates_offline(cache: &PacmanUpdatesCache) -> Result<Vec<PacmanUpdate>> {
-    let output = Command::new("checkupdates")
-        .args(["--nosync", "--nocolor"])
-        .output()
-        .await?;
-    let parsed_updates = str::from_utf8(output.stdout.as_slice())?
-        .lines()
-        .map(parse_update)
-        .collect::<Result<Vec<_>>>()?;
+    let parsed_updates = checkupdates(CheckupdatesMode::NoSync).await?;
     Ok(add_sources_to_updates(parsed_updates, &cache.0))
 }
 

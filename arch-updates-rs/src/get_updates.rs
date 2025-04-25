@@ -4,8 +4,17 @@ use core::str;
 use raur::Raur;
 use srcinfo::Srcinfo;
 use std::str::FromStr;
-use tokio::process::Command;
+use tokio::{process::Command, sync::Semaphore};
 use version_compare::Version;
+
+/// The online version of 'checkupdates', cannot run concurrently.
+/// So we this sempahore is used to represent if it is running.
+static CHECKUPDATES_DB_LOCK: Semaphore = Semaphore::const_new(1);
+
+pub enum CheckupdatesMode {
+    Sync,
+    NoSync,
+}
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Package {
@@ -51,6 +60,7 @@ pub fn aur_update_due(package: &AurUpdate) -> bool {
     pkgver_new > pkgver_old || (pkgver_new == pkgver_old && package.pkgrel_new > package.pkgrel_cur)
 }
 
+
 /// pacman conf has a list of packages that should be ignored by pacman. This
 /// command fetches their pkgnames.
 async fn get_ignored_packages() -> Result<Vec<String>> {
@@ -65,6 +75,34 @@ async fn get_ignored_packages() -> Result<Vec<String>> {
         .lines()
         .map(ToString::to_string)
         .collect())
+}
+
+/// Wrapper around external 'checkupdates' tool.
+pub async fn checkupdates(mode: CheckupdatesMode)-> Result<Vec<ParsedUpdate>> {
+        let (args, _lock) = match mode {
+            CheckupdatesMode::NoSync =>
+(            ["--nosync", "--nocolor"].as_slice(),
+            None
+)        ,
+    CheckupdatesMode::Sync =>
+(            ["--nocolour"].as_slice(),
+            // When using the online version of 'checkupdates', it will fail if run concurrently.
+            // So we use this sempahore to represent if it is running.
+            Some(CHECKUPDATES_DB_LOCK.acquire().await.expect("CHECKUPDATES_DB_LOCK cannot be closed, it is static"))
+)        };
+        let output = Command::new("checkupdates")
+            .args(args)
+            .output()
+            .await?;
+        // Guard against stderr from checkupdates.
+        let stderr = str::from_utf8(output.stderr.as_slice())?;
+        if !stderr.is_empty() {
+            return Err(Error::CheckUpdatesReturnedError(stderr.to_owned()));
+        };
+        str::from_utf8(output.stdout.as_slice())?
+            .lines()
+            .map(parse_update)
+            .collect::<Result<Vec<_>>>()
 }
 
 /// Get a list of all aur packages on the system.
