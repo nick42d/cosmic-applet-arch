@@ -42,7 +42,9 @@
 use core::str;
 use futures::{future::try_join, stream::FuturesOrdered, StreamExt, TryStreamExt};
 use get_updates::{
-    aur_update_due, checkupdates, devel_update_due, get_aur_packages, get_aur_srcinfo, get_devel_packages, get_head_identifier, parse_update, parse_url, parse_ver_and_rel, CheckupdatesMode, PackageUrl
+    aur_update_due, checkupdates, devel_update_due, get_aur_packages, get_aur_srcinfo,
+    get_devel_packages, get_head_identifier, parse_update, parse_url, parse_ver_and_rel,
+    CheckupdatesMode, PackageUrl,
 };
 use raur::Raur;
 use source_repo::{add_sources_to_updates, get_sources_list, SourcesList};
@@ -152,7 +154,8 @@ pub struct DevelUpdatesCache(Vec<DevelUpdate>);
 /// assert!(updates.is_empty());
 /// # };
 pub async fn check_pacman_updates_online() -> Result<(Vec<PacmanUpdate>, PacmanUpdatesCache)> {
-    let (parsed_updates, source_info) = try_join(checkupdates(CheckupdatesMode::Sync), get_sources_list()).await?;
+    let (parsed_updates, source_info) =
+        try_join(checkupdates(CheckupdatesMode::Sync), get_sources_list()).await?;
     let updates = add_sources_to_updates(parsed_updates, &source_info);
     Ok((updates, PacmanUpdatesCache(source_info)))
 }
