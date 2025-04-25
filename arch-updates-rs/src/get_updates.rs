@@ -81,7 +81,7 @@ pub async fn checkupdates(mode: CheckupdatesMode) -> Result<Vec<ParsedUpdate>> {
     let (args, _lock) = match mode {
         CheckupdatesMode::NoSync => (["--nosync", "--nocolor"].as_slice(), None),
         CheckupdatesMode::Sync => (
-            ["--nocolour"].as_slice(),
+            ["--nocolor"].as_slice(),
             // When using the online version of 'checkupdates', it will fail if run concurrently.
             // So we use this sempahore to represent if it is running.
             Some(
