@@ -77,6 +77,8 @@ async fn get_ignored_packages() -> Result<Vec<String>> {
 }
 
 /// Wrapper around external 'checkupdates' tool.
+/// # Note
+/// This will fail if somebody else is running 'checkupdates' in sync mode at the same time (it cannot run in parrellel).
 pub async fn checkupdates(mode: CheckupdatesMode) -> Result<Vec<ParsedUpdate>> {
     let (args, _lock) = match mode {
         CheckupdatesMode::NoSync => (["--nosync", "--nocolor"].as_slice(), None),

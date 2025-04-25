@@ -144,6 +144,9 @@ pub struct DevelUpdatesCache(Vec<DevelUpdate>);
 ///  - Packages that are not up to date.
 ///  - Cache that can be stored in memory to make next query more efficient.
 ///
+/// # Note
+/// This will fail with an error if somebody else is running 'checkupdates' in sync
+/// mode at the same time.
 /// # Usage
 /// ```no_run
 /// # use arch_updates_rs::*;
