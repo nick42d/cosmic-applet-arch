@@ -4,6 +4,8 @@ use directories::ProjectDirs;
 use std::path::PathBuf;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
+use crate::core::proj_dirs;
+
 use super::WarnedResult;
 
 const PACMAN_LOG_PATH: &str = "/var/log/pacman.log";
@@ -57,9 +59,8 @@ fn to_box_writer<T: AsyncWrite + Unpin + Send + 'static>(
 }
 
 fn platform_local_last_read_path() -> std::io::Result<PathBuf> {
-    let proj_dirs = ProjectDirs::from("com", "nick42d", "cosmic-applet-arch")
-        .ok_or(std::io::ErrorKind::Other)?;
-    Ok(proj_dirs
+    Ok(proj_dirs()
+        .ok_or(std::io::ErrorKind::Other)?
         .data_local_dir()
         .to_path_buf()
         .join(LOCAL_LAST_READ_PATH))

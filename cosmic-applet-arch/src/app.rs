@@ -11,6 +11,7 @@ use view::Collapsed;
 
 use crate::news::{self, DatedNewsItem};
 
+mod async_file_lock;
 mod subscription;
 mod view;
 

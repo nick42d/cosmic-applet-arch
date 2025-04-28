@@ -78,7 +78,8 @@ async fn get_ignored_packages() -> Result<Vec<String>> {
 
 /// Wrapper around external 'checkupdates' tool.
 /// # Note
-/// This will fail if somebody else is running 'checkupdates' in sync mode at the same time (it cannot run in parrellel).
+/// This will fail if somebody else is running 'checkupdates' in sync mode at
+/// the same time (it cannot run in parrellel).
 pub async fn checkupdates(mode: CheckupdatesMode) -> Result<Vec<ParsedUpdate>> {
     let (args, _lock) = match mode {
         CheckupdatesMode::NoSync => (["--nosync", "--nocolor"].as_slice(), None),
@@ -277,10 +278,28 @@ pub fn parse_url(source: &str) -> Option<PackageUrl> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use futures::future::try_join;
 
     #[tokio::test]
     async fn test_get_srcinfo() {
         get_aur_srcinfo("hyprlang-git").await.unwrap();
+    }
+    #[tokio::test]
+    async fn test_checkupdates_sync() {
+        checkupdates(CheckupdatesMode::Sync).await.unwrap();
+    }
+    #[tokio::test]
+    async fn test_checkupdates_sync_concurrent() {
+        try_join(
+            checkupdates(CheckupdatesMode::Sync),
+            checkupdates(CheckupdatesMode::Sync),
+        )
+        .await
+        .unwrap();
+    }
+    #[tokio::test]
+    async fn test_checkupdates_nosync() {
+        checkupdates(CheckupdatesMode::NoSync).await.unwrap();
     }
     #[tokio::test]
     async fn test_get_srcinfo_not_in_aur() {

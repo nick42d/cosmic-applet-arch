@@ -1,11 +1,14 @@
+use crate::core::proj_dirs;
 use crate::news::NewsCache;
 use crate::news::{DatedNewsItem, WarnedResult};
 use arch_updates_rs::{
-    AurUpdate, AurUpdatesCache, DevelUpdate, DevelUpdatesCache, PacmanUpdate, PacmanUpdatesCache,
+    check_pacman_updates_online, AurUpdate, AurUpdatesCache, DevelUpdate, DevelUpdatesCache,
+    PacmanUpdate, PacmanUpdatesCache,
 };
 use chrono::{DateTime, Local};
 use futures::TryFutureExt;
 use std::future::Future;
+use std::path::{Path, PathBuf};
 use tokio::join;
 
 #[derive(Clone, Copy, Debug)]
@@ -121,9 +124,38 @@ pub async fn get_updates_offline(cache: &CacheState) -> arch_updates_rs::Result<
     })
 }
 
+/// [[arch_updates_rs::check_pacman_updates_online]] can't run concurrently, so
+/// this is a wrapper around it that uses a file lock to ensure only one
+/// `cosmic-applet-arch` process is running it.
+/// # Note
+/// This will still error if someone else's process is running `checkupdates`!
+/// Since the app continuously polls for updates this should have a small impact
+/// only.
+pub async fn check_pacman_updates_online_exclusive(
+) -> Result<(Vec<PacmanUpdate>, PacmanUpdatesCache), arch_updates_rs::Error> {
+    let lock_file_path = check_pacman_updates_lockfile_path().unwrap();
+    let mut lock = crate::app::async_file_lock::AsyncFileRwLock::new(lock_file_path)
+        .await
+        .unwrap();
+    // TODO: timeout duration (or is this handled by parent).
+    let guard = tokio::time::timeout(std::time::Duration::from_secs(1), lock.write_lock())
+        .await
+        .unwrap();
+    check_pacman_updates_online().await
+}
+
+/// Lockfile to be used by all processes.
+pub fn check_pacman_updates_lockfile_path() -> Result<PathBuf, std::io::Error> {
+    let proj_dirs = proj_dirs().ok_or(std::io::ErrorKind::Other)?;
+    proj_dirs.data_local_dir().to_path_buf().join("TODO");
+    todo!();
+}
+
 pub async fn get_updates_online() -> arch_updates_rs::Result<(Updates, CacheState)> {
     let (pacman, aur, devel) = join!(
-        arch_updates_rs::check_pacman_updates_online(),
+        // arch_updates_rs::check_pacman_updates_online doesn't handle multiple concurrent
+        // processes.
+        check_pacman_updates_online_exclusive(),
         arch_updates_rs::check_aur_updates_online(),
         arch_updates_rs::check_devel_updates_online(),
     );
@@ -138,4 +170,20 @@ pub async fn get_updates_online() -> arch_updates_rs::Result<(Updates, CacheStat
             pacman_cache,
         },
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::app::subscription::core::check_pacman_updates_online_exclusive;
+    use futures::future::try_join;
+
+    #[tokio::test]
+    async fn test_concurrent_check_pacman_updates_online_exclusive() {
+        try_join(
+            check_pacman_updates_online_exclusive(),
+            check_pacman_updates_online_exclusive(),
+        )
+        .await
+        .unwrap();
+    }
 }

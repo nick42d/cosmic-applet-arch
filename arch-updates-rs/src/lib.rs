@@ -43,7 +43,7 @@ use core::str;
 use futures::{future::try_join, stream::FuturesOrdered, StreamExt, TryStreamExt};
 use get_updates::{
     aur_update_due, checkupdates, devel_update_due, get_aur_packages, get_aur_srcinfo,
-    get_devel_packages, get_head_identifier, parse_update, parse_url, parse_ver_and_rel,
+    get_devel_packages, get_head_identifier, parse_url, parse_ver_and_rel,
     CheckupdatesMode, PackageUrl,
 };
 use raur::Raur;

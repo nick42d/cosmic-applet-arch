@@ -17,6 +17,7 @@ pub async fn raw_updates_worker(
     // If we have no cache, that means we haven't run a succesful online check.
     // Offline checks will be skipped until we can run one.
     let mut residual = None;
+    // TODO: Determine if INTERVAL is sufficient to prevent too many timeouts.
     let mut interval = tokio::time::interval(INTERVAL);
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
