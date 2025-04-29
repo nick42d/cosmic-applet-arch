@@ -134,21 +134,21 @@ pub async fn get_updates_offline(cache: &CacheState) -> arch_updates_rs::Result<
 pub async fn check_pacman_updates_online_exclusive(
 ) -> Result<(Vec<PacmanUpdate>, PacmanUpdatesCache), arch_updates_rs::Error> {
     let lock_file_path = check_pacman_updates_lockfile_path().unwrap();
-    let mut lock = crate::app::async_file_lock::AsyncFileRwLock::new(lock_file_path)
-        .await
-        .unwrap();
     // TODO: timeout duration (or is this handled by parent).
-    let guard = tokio::time::timeout(std::time::Duration::from_secs(1), lock.write_lock())
-        .await
-        .unwrap();
+    let _guard = tokio::time::timeout(
+        std::time::Duration::from_secs(100),
+        crate::app::async_file_lock::AsyncFileLock::new(lock_file_path),
+    )
+    .await
+    .unwrap()
+    .unwrap();
     check_pacman_updates_online().await
 }
 
 /// Lockfile to be used by all processes.
 pub fn check_pacman_updates_lockfile_path() -> Result<PathBuf, std::io::Error> {
     let proj_dirs = proj_dirs().ok_or(std::io::ErrorKind::Other)?;
-    proj_dirs.data_local_dir().to_path_buf().join("TODO");
-    todo!();
+    Ok(proj_dirs.data_local_dir().to_path_buf().join("TODO.lock"))
 }
 
 pub async fn get_updates_online() -> arch_updates_rs::Result<(Updates, CacheState)> {
@@ -179,6 +179,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_concurrent_check_pacman_updates_online_exclusive() {
+        // Running this function concurrently should not cause errors.
         try_join(
             check_pacman_updates_online_exclusive(),
             check_pacman_updates_online_exclusive(),

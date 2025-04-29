@@ -1,5 +1,17 @@
-//! Module to asynchronously provide a file locking mechanism (wrapping
-//! `fd-lock`).
+//! Module to asynchronously provide a file locking mechanism using advisory
+//! locks. The concept for this has largely been borrowed from `fd-lock` crate,
+//! but simplified in the following ways:
+//!
+//! - Only non-Solaris unix is supported.
+//! - Asynchronous interface to obtain the lock (using a task)
+//! - Lock simply provides a semaphore-like mechanism - no read/write access is
+//!   provided to the lockfile.
+//!
+//! # My understanding of advisory lock behaviour
+//! Advisory locks are managed by the kernel and are automatically dropped by
+//! the kernel when the process holding them is killed. This means we shouldn't
+//! have the risk of a process crashing and not releasing the lock.
+//!
 //! # Note from fd-lock
 //! “advisory locks” are locks which programs must opt-in to adhere to. This
 //! means that they can be used to coordinate file access, but not prevent
@@ -7,75 +19,75 @@
 //! same program. But do not use this to prevent actors from accessing or
 //! modifying files.
 
-use fd_lock::RwLock;
-use std::fs::File;
-use std::io;
 use std::path::Path;
 
 /// Acquire an exclusive write lock asynchronously
 /// This can be used to communicate with another process that a lock is applied.
-pub struct AsyncFileRwLock(RwLock<File>);
-pub struct AsyncFileRwLockWriteGuard<'lock>(fd_lock::RwLockWriteGuard<'lock, File>);
+#[must_use = "if unused the lock will immediately unlock"]
+pub struct AsyncFileLock(std::fs::File);
 
-impl AsyncFileRwLock {
-    pub async fn new<P: AsRef<Path>>(path: P) -> std::io::Result<Self> {
+impl AsyncFileLock {
+    /// Locks file at `path` until this is dropped.
+    /// Creates the file if it does not exist.
+    pub async fn new<P: AsRef<Path>>(path: P) -> anyhow::Result<Self> {
         let file = tokio::fs::OpenOptions::new()
             .read(true)
             .write(true)
             .create(true)
+            .truncate(false)
             .open(&path)
             .await?
             .into_std()
             .await;
-        let handle = RwLock::new(file);
-        Ok(AsyncFileRwLock(handle))
+        let file = tokio::task::spawn_blocking(move || {
+            let err = rustix::fs::flock(&file, rustix::fs::FlockOperation::LockExclusive);
+            err.map(|_| file)
+        })
+        .await
+        .unwrap()?;
+        Ok(Self(file))
     }
-    /// Acquire an exclusive write lock asynchronously
-    /// This doesn't actually do anything, but can be used to communicate with
-    /// another process that a lock is applied. NOTE: This spawns a
-    /// dedicated thread.
-    pub async fn write_lock(&mut self) -> io::Result<AsyncFileRwLockWriteGuard<'_>> {
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        std::thread::scope(move |s| {
-            s.spawn(move || {
-                tx.send(self.0.write()).unwrap();
-            });
-        });
-        let guard = rx.await.unwrap()?;
-        Ok(AsyncFileRwLockWriteGuard(guard))
+}
+
+impl Drop for AsyncFileLock {
+    fn drop(&mut self) {
+        let _ = rustix::fs::flock(&self.0, rustix::fs::FlockOperation::Unlock);
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::app::async_file_lock::AsyncFileRwLock;
+    use crate::app::async_file_lock::AsyncFileLock;
     use std::time::Duration;
     use tempfile::tempdir;
 
     #[tokio::test]
-    async fn test_async_rw_lock() {
+    async fn test_async_lock() {
         let (tx, rx) = std::sync::mpsc::channel();
         let dir = tempdir().unwrap();
-        let mut lock = AsyncFileRwLock::new(dir.path().join("tmp.lock"))
+        eprintln!("Attempting to acquire first lock");
+        let lock = AsyncFileLock::new(dir.path().join("tmp.lock"))
             .await
             .unwrap();
-        let guard = lock.write_lock().await.unwrap();
+        eprintln!("First lock acquired");
         let tx_2 = tx.clone();
-        let thread = tokio::spawn(async move {
-            let mut lock = AsyncFileRwLock::new(dir.path().join("tmp.lock"))
+        let handle = tokio::spawn(async move {
+            eprintln!("Attempting to acquire second lock");
+            let _lock = AsyncFileLock::new(dir.path().join("tmp.lock"))
                 .await
                 .unwrap();
-            let guard = lock.write_lock().await.unwrap();
-            // This will not run until guard is dropped.
+            // This will not run until first lock is dropped.
             tx_2.send(2).unwrap();
+            eprintln!("Second lock acquired");
         });
+        eprintln!("Sleeping 1s");
         tokio::time::sleep(Duration::from_secs(1)).await;
         tx.send(1).unwrap();
-        drop(guard);
-        tokio::time::timeout(std::time::Duration::from_secs(1), thread)
-            .await
-            .unwrap()
-            .unwrap();
+        drop(lock);
+        eprintln!("Dropped first lock");
+        // Must drop all senders to collect rx
+        drop(tx);
+        handle.await.unwrap();
         assert_eq!(rx.iter().collect::<Vec<_>>(), vec![1, 2])
     }
 }
