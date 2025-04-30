@@ -1,6 +1,5 @@
 use anyhow::{anyhow, Context};
 use chrono::{DateTime, FixedOffset};
-use directories::ProjectDirs;
 use std::path::PathBuf;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 

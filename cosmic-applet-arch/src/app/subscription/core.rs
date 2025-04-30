@@ -1,6 +1,7 @@
 use crate::core::proj_dirs;
 use crate::news::NewsCache;
 use crate::news::{DatedNewsItem, WarnedResult};
+use anyhow::Context;
 use arch_updates_rs::{
     check_pacman_updates_online, AurUpdate, AurUpdatesCache, DevelUpdate, DevelUpdatesCache,
     PacmanUpdate, PacmanUpdatesCache,
@@ -8,8 +9,10 @@ use arch_updates_rs::{
 use chrono::{DateTime, Local};
 use futures::TryFutureExt;
 use std::future::Future;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use tokio::join;
+
+const LOCAL_CHECKUPDATES_LOCK_PATH: &str = "checkupdates.lock";
 
 #[derive(Clone, Copy, Debug)]
 pub enum CheckType {
@@ -127,31 +130,31 @@ pub async fn get_updates_offline(cache: &CacheState) -> arch_updates_rs::Result<
 /// [[arch_updates_rs::check_pacman_updates_online]] can't run concurrently, so
 /// this is a wrapper around it that uses a file lock to ensure only one
 /// `cosmic-applet-arch` process is running it.
-/// # Note
-/// This will still error if someone else's process is running `checkupdates`!
+/// # Notes
+/// 1. This will still error if someone else's process is running
+///    `checkupdates`!
 /// Since the app continuously polls for updates this should have a small impact
 /// only.
+/// 2. Recommend running this under a timeout incase lock somehow deadlocks.
 pub async fn check_pacman_updates_online_exclusive(
-) -> Result<(Vec<PacmanUpdate>, PacmanUpdatesCache), arch_updates_rs::Error> {
+) -> anyhow::Result<(Vec<PacmanUpdate>, PacmanUpdatesCache)> {
     let lock_file_path = check_pacman_updates_lockfile_path().unwrap();
-    // TODO: timeout duration (or is this handled by parent).
-    let _guard = tokio::time::timeout(
-        std::time::Duration::from_secs(100),
-        crate::app::async_file_lock::AsyncFileLock::new(lock_file_path),
-    )
-    .await
-    .unwrap()
-    .unwrap();
-    check_pacman_updates_online().await
+    let _guard = crate::app::async_file_lock::AsyncFileLock::new(lock_file_path)
+        .await
+        .context("Unable to obtain a lock for use of checkupdates")?;
+    Ok(check_pacman_updates_online().await?)
 }
 
 /// Lockfile to be used by all processes.
-pub fn check_pacman_updates_lockfile_path() -> Result<PathBuf, std::io::Error> {
-    let proj_dirs = proj_dirs().ok_or(std::io::ErrorKind::Other)?;
-    Ok(proj_dirs.data_local_dir().to_path_buf().join("TODO.lock"))
+pub fn check_pacman_updates_lockfile_path() -> anyhow::Result<PathBuf> {
+    let proj_dirs = proj_dirs().context("Unable to obtain a local data storage directory")?;
+    Ok(proj_dirs
+        .data_local_dir()
+        .to_path_buf()
+        .join(LOCAL_CHECKUPDATES_LOCK_PATH))
 }
 
-pub async fn get_updates_online() -> arch_updates_rs::Result<(Updates, CacheState)> {
+pub async fn get_updates_online() -> anyhow::Result<(Updates, CacheState)> {
     let (pacman, aur, devel) = join!(
         // arch_updates_rs::check_pacman_updates_online doesn't handle multiple concurrent
         // processes.
@@ -178,6 +181,7 @@ mod tests {
     use futures::future::try_join;
 
     #[tokio::test]
+    #[ignore = "Effectful test (local storage)"]
     async fn test_concurrent_check_pacman_updates_online_exclusive() {
         // Running this function concurrently should not cause errors.
         try_join(

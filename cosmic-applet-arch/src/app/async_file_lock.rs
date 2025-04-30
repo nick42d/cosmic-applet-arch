@@ -29,7 +29,7 @@ pub struct AsyncFileLock(std::fs::File);
 impl AsyncFileLock {
     /// Locks file at `path` until this is dropped.
     /// Creates the file if it does not exist.
-    pub async fn new<P: AsRef<Path>>(path: P) -> anyhow::Result<Self> {
+    pub async fn new<P: AsRef<Path>>(path: P) -> std::io::Result<Self> {
         let file = tokio::fs::OpenOptions::new()
             .read(true)
             .write(true)

@@ -43,8 +43,8 @@ use core::str;
 use futures::{future::try_join, stream::FuturesOrdered, StreamExt, TryStreamExt};
 use get_updates::{
     aur_update_due, checkupdates, devel_update_due, get_aur_packages, get_aur_srcinfo,
-    get_devel_packages, get_head_identifier, parse_url, parse_ver_and_rel,
-    CheckupdatesMode, PackageUrl,
+    get_devel_packages, get_head_identifier, parse_url, parse_ver_and_rel, CheckupdatesMode,
+    PackageUrl,
 };
 use raur::Raur;
 use source_repo::{add_sources_to_updates, get_sources_list, SourcesList};
@@ -145,8 +145,8 @@ pub struct DevelUpdatesCache(Vec<DevelUpdate>);
 ///  - Cache that can be stored in memory to make next query more efficient.
 ///
 /// # Note
-/// This will fail with an error if somebody else is running 'checkupdates' in sync
-/// mode at the same time.
+/// This will fail with an error if somebody else is running 'checkupdates' in
+/// sync mode at the same time.
 /// # Usage
 /// ```no_run
 /// # use arch_updates_rs::*;
