@@ -21,13 +21,14 @@
 
 use std::path::Path;
 
-/// Acquire an exclusive write lock asynchronously
-/// This can be used to communicate with another process that a lock is applied.
+/// Exclusive advisory lock on a file that remains until this struct is dropped.
+/// # Note
+/// To avoid panicing in Drop, errors unlocking the file are silently ignored.
 #[must_use = "if unused the lock will immediately unlock"]
 pub struct AsyncFileLock(std::fs::File);
 
 impl AsyncFileLock {
-    /// Locks file at `path` until this is dropped.
+    /// Exclusively locks file at `path` until this is dropped.
     /// Creates the file if it does not exist.
     pub async fn new<P: AsRef<Path>>(path: P) -> std::io::Result<Self> {
         let file = tokio::fs::OpenOptions::new()
