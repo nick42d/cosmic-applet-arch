@@ -1,6 +1,5 @@
 use crate::core::proj_dirs;
-use crate::news::NewsCache;
-use crate::news::{DatedNewsItem, WarnedResult};
+use crate::news::{DatedNewsItem, NewsCache, WarnedResult};
 use anyhow::Context;
 use arch_updates_rs::{
     check_pacman_updates_online, AurUpdate, AurUpdatesCache, DevelUpdate, DevelUpdatesCache,

@@ -1,3 +1,5 @@
+imports_granularity = "Module"
+group_imports = "One"
 unstable_features = true
 # Auto format comment width for this project. Note that this is an unstable feature.
 wrap_comments = true

@@ -2,9 +2,8 @@
 use anyhow::Result;
 use chrono::FixedOffset;
 use latest_update::Arch;
-use news_impl::{get_latest_arch_news, Network};
-
 pub use news_impl::DatedNewsItem;
+use news_impl::{get_latest_arch_news, Network};
 
 mod latest_update;
 mod news_impl;

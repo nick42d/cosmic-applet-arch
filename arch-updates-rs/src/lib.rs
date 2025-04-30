@@ -40,7 +40,9 @@
 //! }
 //! ```
 use core::str;
-use futures::{future::try_join, stream::FuturesOrdered, StreamExt, TryStreamExt};
+use futures::future::try_join;
+use futures::stream::FuturesOrdered;
+use futures::{StreamExt, TryStreamExt};
 use get_updates::{
     aur_update_due, checkupdates, devel_update_due, get_aur_packages, get_aur_srcinfo,
     get_devel_packages, get_head_identifier, parse_url, parse_ver_and_rel, CheckupdatesMode,
@@ -48,7 +50,8 @@ use get_updates::{
 };
 use raur::Raur;
 use source_repo::{add_sources_to_updates, get_sources_list, SourcesList};
-use std::{io, str::Utf8Error};
+use std::io;
+use std::str::Utf8Error;
 use thiserror::Error;
 
 mod get_updates;

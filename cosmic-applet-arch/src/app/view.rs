@@ -1,18 +1,13 @@
 use crate::app::{CosmicAppletArch, Message, NewsState, UpdatesState};
+use cosmic::app::Core;
+use cosmic::iced::alignment::{Horizontal, Vertical};
+use cosmic::iced::Length;
+use cosmic::theme::Button;
 use cosmic::widget::Id;
-use cosmic::{
-    app::Core,
-    iced::{
-        alignment::{Horizontal, Vertical},
-        Length,
-    },
-    theme::Button,
-    Application, Element,
-};
+use cosmic::{Application, Element};
 use std::borrow::Cow;
 use std::rc::Rc;
 use std::sync::LazyLock;
-
 pub use widgets::*;
 /// What is display when opening the applet menu
 pub mod view_window;

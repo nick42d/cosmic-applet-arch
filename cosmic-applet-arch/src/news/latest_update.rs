@@ -1,11 +1,9 @@
+use super::WarnedResult;
+use crate::core::proj_dirs;
 use anyhow::{anyhow, Context};
 use chrono::{DateTime, FixedOffset};
 use std::path::PathBuf;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-
-use crate::core::proj_dirs;
-
-use super::WarnedResult;
 
 const PACMAN_LOG_PATH: &str = "/var/log/pacman.log";
 const LOCAL_LAST_READ_PATH: &str = "last_read";

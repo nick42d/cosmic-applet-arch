@@ -1,9 +1,11 @@
 //! Get the source repo of a package.
 
 use super::Result;
-use crate::{get_updates::ParsedUpdate, Error, PacmanUpdate};
+use crate::get_updates::ParsedUpdate;
+use crate::{Error, PacmanUpdate};
 use core::str;
-use std::{collections::HashMap, fmt::Display};
+use std::collections::HashMap;
+use std::fmt::Display;
 
 /// Maps pkgnames to their source repos.
 pub type SourcesList = HashMap<String, SourceRepo>;
@@ -121,11 +123,11 @@ impl Display for SourceRepo {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        get_updates::ParsedUpdate,
-        source_repo::{add_sources_to_updates, get_sources_list, parse_pacman_sl, SourceRepo},
-        Error, PacmanUpdate,
+    use crate::get_updates::ParsedUpdate;
+    use crate::source_repo::{
+        add_sources_to_updates, get_sources_list, parse_pacman_sl, SourceRepo,
     };
+    use crate::{Error, PacmanUpdate};
 
     #[tokio::test]
     async fn test_get_sources_list() {

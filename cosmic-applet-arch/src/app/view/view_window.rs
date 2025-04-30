@@ -1,14 +1,9 @@
-use crate::{app::Message, app::UpdatesState, CosmicAppletArch};
-use crate::{
-    app::{
-        view::{
-            cosmic_applet_divider, cosmic_body_text_row, errors_row_widget, news_available_widget,
-            updates_available_widget, AppIcon, DisplayPackage, MAX_NEWS_LINES, MAX_UPDATE_LINES,
-        },
-        NewsState,
-    },
-    fl,
+use crate::app::view::{
+    cosmic_applet_divider, cosmic_body_text_row, errors_row_widget, news_available_widget,
+    updates_available_widget, AppIcon, DisplayPackage, MAX_NEWS_LINES, MAX_UPDATE_LINES,
 };
+use crate::app::{Message, NewsState, UpdatesState};
+use crate::{fl, CosmicAppletArch};
 use chrono::{DateTime, Local};
 use cosmic::{theme, Element};
 

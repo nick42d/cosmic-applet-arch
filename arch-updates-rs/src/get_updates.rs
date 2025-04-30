@@ -4,7 +4,8 @@ use core::str;
 use raur::Raur;
 use srcinfo::Srcinfo;
 use std::str::FromStr;
-use tokio::{process::Command, sync::Semaphore};
+use tokio::process::Command;
+use tokio::sync::Semaphore;
 use version_compare::Version;
 
 /// The online version of 'checkupdates', cannot run concurrently.
