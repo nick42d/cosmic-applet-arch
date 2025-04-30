@@ -379,13 +379,10 @@ impl CosmicAppletArch {
         // message is received. So, we intentionally bounce this message if it's
         // the first time updates have been received.
         let task = if matches!(self.updates, UpdatesState::Init) {
-            Task::done(
-                Message::CheckUpdatesMsg {
-                    updates: updates.clone(),
-                    checked_online_time: time,
-                }
-                .into(),
-            )
+            Task::done(cosmic::app::Message::App(Message::CheckUpdatesMsg {
+                updates: updates.clone(),
+                checked_online_time: time,
+            }))
         } else {
             Task::none()
         };
