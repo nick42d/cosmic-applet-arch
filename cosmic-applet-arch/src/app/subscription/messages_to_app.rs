@@ -2,7 +2,8 @@ use super::core::Updates;
 use super::Message;
 use crate::news::DatedNewsItem;
 use chrono::{DateTime, Local};
-use cosmic::iced::futures::{channel::mpsc, SinkExt};
+use cosmic::iced::futures::channel::mpsc;
+use cosmic::iced::futures::SinkExt;
 
 pub async fn send_update_error(tx: &mut mpsc::Sender<Message>, e: impl std::fmt::Display) {
     tx.send(Message::CheckUpdatesErrorsMsg {

@@ -2,14 +2,14 @@
 use anyhow::Result;
 use chrono::FixedOffset;
 use latest_update::Arch;
-use news_impl::{get_latest_arch_news, Network};
-
 pub use news_impl::DatedNewsItem;
+use news_impl::{get_latest_arch_news, Network};
 
 mod latest_update;
 mod news_impl;
 
 #[derive(Clone)]
+#[cfg_attr(feature = "mock-api", allow(dead_code))]
 pub struct NewsCache(Vec<DatedNewsItem>);
 
 pub async fn get_news_online(
@@ -21,6 +21,7 @@ pub async fn get_news_online(
         .map(|updates| (updates.clone(), NewsCache(updates)))
 }
 
+#[cfg_attr(feature = "mock-api", allow(dead_code))]
 pub async fn get_news_offline(
     cache: &NewsCache,
 ) -> WarnedResult<Vec<DatedNewsItem>, String, anyhow::Error> {

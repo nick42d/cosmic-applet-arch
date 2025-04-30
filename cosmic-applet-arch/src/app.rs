@@ -1,3 +1,4 @@
+use crate::news::{self, DatedNewsItem};
 use chrono::{DateTime, Local};
 use cosmic::app::{Core, Task};
 use cosmic::iced::platform_specific::shell::wayland::commands::popup::{destroy_popup, get_popup};
@@ -9,8 +10,9 @@ use std::time::Duration;
 use subscription::core::Updates;
 use view::Collapsed;
 
-use crate::news::{self, DatedNewsItem};
-
+// See module docs.
+#[cfg(all(unix, not(target_os = "solaris")))]
+mod async_file_lock;
 mod subscription;
 mod view;
 

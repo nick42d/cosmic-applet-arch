@@ -1,10 +1,9 @@
+use super::WarnedResult;
+use crate::core::proj_dirs;
 use anyhow::{anyhow, Context};
 use chrono::{DateTime, FixedOffset};
-use directories::ProjectDirs;
 use std::path::PathBuf;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-
-use super::WarnedResult;
 
 const PACMAN_LOG_PATH: &str = "/var/log/pacman.log";
 const LOCAL_LAST_READ_PATH: &str = "last_read";
@@ -57,9 +56,11 @@ fn to_box_writer<T: AsyncWrite + Unpin + Send + 'static>(
 }
 
 fn platform_local_last_read_path() -> std::io::Result<PathBuf> {
-    let proj_dirs = ProjectDirs::from("com", "nick42d", "cosmic-applet-arch")
-        .ok_or(std::io::ErrorKind::Other)?;
-    Ok(proj_dirs
+    Ok(proj_dirs()
+        .ok_or(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Unable to obtain a local data storage directory",
+        ))?
         .data_local_dir()
         .to_path_buf()
         .join(LOCAL_LAST_READ_PATH))
@@ -126,7 +127,7 @@ async fn get_latest_pacman_update(
     let Some(last_update_line) = log
         .lines()
         .filter(|line| line.contains("starting full system upgrade"))
-        .last()
+        .next_back()
     else {
         return Ok(None);
     };

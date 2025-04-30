@@ -1,15 +1,12 @@
 use super::AppIcon;
-use crate::{app::Message, fl, news::DatedNewsItem};
+use crate::app::Message;
+use crate::fl;
+use crate::news::DatedNewsItem;
 use arch_updates_rs::{AurUpdate, DevelUpdate, PacmanUpdate, SourceRepo};
-use cosmic::{
-    iced::{
-        alignment::{Horizontal, Vertical},
-        Length,
-    },
-    theme,
-    widget::{JustifyContent, Widget},
-    Element,
-};
+use cosmic::iced::alignment::{Horizontal, Vertical};
+use cosmic::iced::Length;
+use cosmic::widget::{JustifyContent, Widget};
+use cosmic::{theme, Element};
 use std::fmt::Display;
 
 #[derive(Default)]
