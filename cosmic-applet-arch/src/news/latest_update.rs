@@ -126,7 +126,7 @@ async fn get_latest_pacman_update(
     let Some(last_update_line) = log
         .lines()
         .filter(|line| line.contains("starting full system upgrade"))
-        .last()
+        .next_back()
     else {
         return Ok(None);
     };

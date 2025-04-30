@@ -9,7 +9,6 @@ use arch_updates_rs::{
 use chrono::{DateTime, Local};
 use futures::TryFutureExt;
 use std::future::Future;
-use std::path::PathBuf;
 use tokio::join;
 
 const LOCAL_CHECKUPDATES_LOCK_PATH: &str = "checkupdates.lock";
@@ -33,6 +32,7 @@ pub struct OnlineUpdateResidual {
 }
 
 #[derive(Default, Clone)]
+#[cfg_attr(feature = "mock-api", allow(dead_code))]
 pub struct CacheState {
     pacman_cache: PacmanUpdatesCache,
     aur_cache: AurUpdatesCache,
@@ -132,26 +132,20 @@ pub async fn get_updates_offline(cache: &CacheState) -> arch_updates_rs::Result<
 /// `cosmic-applet-arch` process is running it.
 /// # Notes
 /// 1. This will still error if someone else's process is running
-///    `checkupdates`!
-/// Since the app continuously polls for updates this should have a small impact
-/// only.
+///    `checkupdates`! Since the app continuously polls for updates this should
+///    have a small impact only.
 /// 2. Recommend running this under a timeout incase lock somehow deadlocks.
 pub async fn check_pacman_updates_online_exclusive(
 ) -> anyhow::Result<(Vec<PacmanUpdate>, PacmanUpdatesCache)> {
-    let lock_file_path = check_pacman_updates_lockfile_path().unwrap();
+    let proj_dirs = proj_dirs().context("Unable to obtain a local data storage directory")?;
+    let lock_file_path = proj_dirs
+        .data_local_dir()
+        .to_path_buf()
+        .join(LOCAL_CHECKUPDATES_LOCK_PATH);
     let _guard = crate::app::async_file_lock::AsyncFileLock::new(lock_file_path)
         .await
         .context("Unable to obtain a lock for use of checkupdates")?;
     Ok(check_pacman_updates_online().await?)
-}
-
-/// Lockfile to be used by all processes.
-pub fn check_pacman_updates_lockfile_path() -> anyhow::Result<PathBuf> {
-    let proj_dirs = proj_dirs().context("Unable to obtain a local data storage directory")?;
-    Ok(proj_dirs
-        .data_local_dir()
-        .to_path_buf()
-        .join(LOCAL_CHECKUPDATES_LOCK_PATH))
 }
 
 pub async fn get_updates_online() -> anyhow::Result<(Updates, CacheState)> {
