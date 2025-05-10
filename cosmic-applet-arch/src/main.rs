@@ -9,5 +9,7 @@ mod news;
 use app::CosmicAppletArch;
 
 fn main() -> cosmic::iced::Result {
+    core::localization::localize();
+
     cosmic::applet::run::<CosmicAppletArch>(())
 }
