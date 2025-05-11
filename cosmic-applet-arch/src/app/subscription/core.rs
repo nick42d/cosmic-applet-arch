@@ -137,6 +137,9 @@ pub async fn get_updates_offline(cache: &CacheState) -> arch_updates_rs::Result<
 pub async fn check_pacman_updates_online_exclusive(
 ) -> anyhow::Result<(Vec<PacmanUpdate>, PacmanUpdatesCache)> {
     let proj_dirs = proj_dirs().context("Unable to obtain a local data storage directory")?;
+    tokio::fs::create_dir_all(proj_dirs.data_local_dir())
+        .await
+        .context("Unable to create local data storage directory")?;
     let lock_file_path = proj_dirs
         .data_local_dir()
         .to_path_buf()
