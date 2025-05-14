@@ -19,8 +19,12 @@ pub static LANGUAGE_LOADER: LazyLock<FluentLanguageLoader> = LazyLock::new(|| {
     loader
 });
 
+pub fn localizer() -> Box<dyn Localizer> {
+    Box::from(DefaultLocalizer::new(&*LANGUAGE_LOADER, &Localizations))
+}
+
 pub fn localize() {
-    let localizer = DefaultLocalizer::new(&*LANGUAGE_LOADER, &Localizations);
+    let localizer = localizer();
     let requested_languages = i18n_embed::DesktopLanguageRequester::requested_languages();
 
     if let Err(error) = localizer.select(&requested_languages) {
