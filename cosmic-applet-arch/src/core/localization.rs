@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use i18n_embed::fluent::{fluent_language_loader, FluentLanguageLoader};
-use i18n_embed::{LanguageLoader, Localizer, DefaultLocalizer};
+use i18n_embed::LanguageLoader;
 use rust_embed::RustEmbed;
 use std::sync::LazyLock;
 
@@ -18,19 +18,6 @@ pub static LANGUAGE_LOADER: LazyLock<FluentLanguageLoader> = LazyLock::new(|| {
 
     loader
 });
-
-pub fn localizer() -> Box<dyn Localizer> {
-    Box::from(DefaultLocalizer::new(&*LANGUAGE_LOADER, &Localizations))
-}
-
-pub fn localize() {
-    let localizer = localizer();
-    let requested_languages = i18n_embed::DesktopLanguageRequester::requested_languages();
-
-    if let Err(error) = localizer.select(&requested_languages) {
-        eprintln!("Error while selecting language: {}", error);
-    }
-}
 
 #[macro_export]
 macro_rules! fl {
