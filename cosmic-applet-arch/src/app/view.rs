@@ -126,7 +126,7 @@ pub fn applet_icon(core: &Core, icon_type: AppIcon) -> cosmic::widget::Icon {
 }
 
 // Extension of applet context icon_button_from_handle function.
-pub fn applet_button_with_text<'a, Message: 'static>(
+pub fn applet_button_with_text<'a, Message: 'static + Clone>(
     core: &Core,
     icon: AppIcon,
     additional_icon: Option<AppIcon>,
