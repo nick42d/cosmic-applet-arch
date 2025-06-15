@@ -26,7 +26,7 @@ rustix = {version = "1.0.5", features = ["fs"]}
 git = "https://github.com/pop-os/libcosmic.git"
 # To keep builds reproducible, libcosmic should be pegged to a rev.
 # This should be updated periodically.
-rev = "e5802b5"
+rev = "12317d8"
 default-features = false
 features = ["applet", "tokio", "wayland", "autosize"]
 
