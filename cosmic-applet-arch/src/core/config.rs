@@ -1,7 +1,7 @@
 //! Config for cosmic-applet-arch
 
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 const CONFIG_FILE_NAME: &str = "config.toml";
 
@@ -20,6 +20,8 @@ pub struct Config {
     /// first interval), the system will update the latest version in memory
     /// from the internet.
     online_check_period: usize,
+    /// If you are using unofficial repositories, a package url can be provided.
+    other_repo_urls: HashMap<String, String>,
 }
 
 #[derive(Deserialize, Serialize, Eq, PartialEq, Hash)]
@@ -37,23 +39,26 @@ impl Default for Config {
             interval_secs: 6,
             timeout_secs: 120,
             online_check_period: 600,
+            other_repo_urls: Default::default(),
         }
     }
 }
 
 async fn get_config() -> Result<Config, std::io::Error> {
-    let config_dir = super::proj_dirs().unwrap().config_dir();
+    let dirs = super::proj_dirs().unwrap();
+    let config_dir = dirs.config_dir();
     tokio::fs::create_dir_all(config_dir).await.unwrap();
     let mut config_file_path = config_dir.to_path_buf();
     config_file_path.push(CONFIG_FILE_NAME);
     let file = tokio::fs::read_to_string(config_file_path).await.unwrap();
-    todo!()
+    Ok(toml::from_str(&file).unwrap())
 }
 
 #[cfg(test)]
 mod tests {
     #[tokio::test]
-    async fn test_config() {
-        panic!()
+    async fn test_config_reads() {
+        let file = tokio::fs::read_to_string("test/config.toml").await.unwrap();
+        toml::from_str(&file).unwrap()
     }
 }
