@@ -3,7 +3,10 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
+const CONFIG_FILE_NAME: &str = "config.toml";
+
 #[derive(Deserialize, Serialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Config {
     /// UpdateTypes to exclude from the updates count shown on the taskbar.
     /// These UpdateTypes are still checked and can be seen by opening the
@@ -20,6 +23,7 @@ pub struct Config {
 }
 
 #[derive(Deserialize, Serialize, Eq, PartialEq, Hash)]
+#[serde(rename = "snake_case")]
 pub enum UpdateType {
     Aur,
     Devel,
@@ -34,5 +38,22 @@ impl Default for Config {
             timeout_secs: 120,
             online_check_period: 600,
         }
+    }
+}
+
+async fn get_config() -> Result<Config, std::io::Error> {
+    let config_dir = super::proj_dirs().unwrap().config_dir();
+    tokio::fs::create_dir_all(config_dir).await.unwrap();
+    let mut config_file_path = config_dir.to_path_buf();
+    config_file_path.push(CONFIG_FILE_NAME);
+    let file = tokio::fs::read_to_string(config_file_path).await.unwrap();
+    todo!()
+}
+
+#[cfg(test)]
+mod tests {
+    #[tokio::test]
+    async fn test_config() {
+        panic!()
     }
 }
