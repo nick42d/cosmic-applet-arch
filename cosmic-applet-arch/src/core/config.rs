@@ -5,7 +5,7 @@ use std::collections::{HashMap, HashSet};
 
 const CONFIG_FILE_NAME: &str = "config.toml";
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug, PartialEq)]
 #[serde(rename_all = "snake_case", deny_unknown_fields)]
 pub struct Config {
     /// UpdateTypes to exclude from the updates count shown on the taskbar.
@@ -24,8 +24,8 @@ pub struct Config {
     other_repo_urls: HashMap<String, String>,
 }
 
-#[derive(Deserialize, Serialize, Eq, PartialEq, Hash)]
-#[serde(rename = "snake_case")]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Hash)]
+#[serde(rename_all = "snake_case")]
 pub enum UpdateType {
     Aur,
     Devel,
@@ -56,9 +56,19 @@ async fn get_config() -> Result<Config, std::io::Error> {
 
 #[cfg(test)]
 mod tests {
+    use crate::core::config::Config;
+
     #[tokio::test]
     async fn test_config_reads() {
         let file = tokio::fs::read_to_string("test/config.toml").await.unwrap();
-        toml::from_str(&file).unwrap()
+        let parsed = toml::from_str::<Config>(&file).unwrap();
+        let mut expeceted = Config {
+            exclude_from_counter: todo!(),
+            interval_secs: todo!(),
+            timeout_secs: todo!(),
+            online_check_period: todo!(),
+            other_repo_urls: todo!(),
+        };
+        assert_eq!(parsed, Config::default())
     }
 }
