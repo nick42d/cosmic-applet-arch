@@ -12,20 +12,20 @@ pub struct Config {
     /// UpdateTypes to exclude from the updates count shown on the taskbar.
     /// These UpdateTypes are still checked and can be seen by opening the
     /// popup. See https://github.com/nick42d/cosmic-applet-arch/issues/28
-    exclude_from_counter: HashSet<UpdateType>,
+    pub exclude_from_counter: HashSet<UpdateType>,
     /// How often to compare current packages with the latest version in memory.
-    interval_secs: u64,
+    pub interval_secs: u64,
     /// How long the api call can run without triggering a timeout.
-    timeout_secs: u64,
+    pub timeout_secs: u64,
     /// Every `online_check_period` number of `interval_secs`s (starting at the
     /// first interval), the system will update the latest version in memory
     /// from the internet.
-    online_check_period: usize,
+    pub online_check_period: usize,
     /// If you are using unofficial repositories, a package url can be provided.
-    other_repo_urls: HashMap<String, String>,
+    pub other_repo_urls: HashMap<String, String>,
 }
 
-#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Hash)]
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Hash, Clone, Copy)]
 #[serde(rename_all = "snake_case")]
 pub enum UpdateType {
     Aur,

@@ -1,4 +1,4 @@
-use super::{CosmicAppletArch, Message, CYCLES, SUBSCRIPTION_BUF_SIZE};
+use super::{CosmicAppletArch, Message, SUBSCRIPTION_BUF_SIZE};
 
 #[cfg(feature = "mock-api")]
 /// This module provides a way to feed mock data to the app when compiled with
@@ -14,8 +14,12 @@ mod updates_worker;
 pub fn subscription(app: &CosmicAppletArch) -> cosmic::iced::Subscription<Message> {
     let refresh_pressed_notifier = app.refresh_pressed_notifier.clone();
     let clear_news_pressed_notifier = app.clear_news_pressed_notifier.clone();
-    let news_worker = |tx| news_worker::raw_news_worker(tx, clear_news_pressed_notifier);
-    let updates_worker = |tx| updates_worker::raw_updates_worker(tx, refresh_pressed_notifier);
+    let config_arc = app.config.clone();
+    let news_worker =
+        |tx| news_worker::raw_news_worker(tx, clear_news_pressed_notifier, config_arc);
+    let config_arc = app.config.clone();
+    let updates_worker =
+        |tx| updates_worker::raw_updates_worker(tx, refresh_pressed_notifier, config_arc);
     let updates_stream =
         cosmic::iced_futures::stream::channel(SUBSCRIPTION_BUF_SIZE, updates_worker);
     let news_stream = cosmic::iced_futures::stream::channel(SUBSCRIPTION_BUF_SIZE, news_worker);

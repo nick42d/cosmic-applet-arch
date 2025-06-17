@@ -1,3 +1,4 @@
+use crate::core::config::Config;
 use crate::news::{self, DatedNewsItem};
 use chrono::{DateTime, Local};
 use cosmic::app::{Core, Task};
@@ -16,13 +17,6 @@ mod async_file_lock;
 mod subscription;
 mod view;
 
-/// How often to compare current packages with the latest version in memory.
-const INTERVAL: Duration = Duration::from_secs(6);
-/// How long the api call can run without triggering a timeout.
-const TIMEOUT: Duration = Duration::from_secs(60 * 2);
-/// Every `CYCLES` number of `INTERVAL`s (starting at the first interval), the
-/// system will update the latest version in memory from the internet.
-const CYCLES: usize = 600;
 const SUBSCRIPTION_BUF_SIZE: usize = 10;
 
 #[derive(Default)]
@@ -38,6 +32,7 @@ pub struct CosmicAppletArch {
     clear_news_pressed_notifier: Arc<tokio::sync::Notify>,
     news: NewsState,
     updates: UpdatesState,
+    config: Arc<Config>,
 }
 
 #[derive(Default, Debug)]
@@ -118,8 +113,7 @@ impl Application for CosmicAppletArch {
     // Use the default Cosmic executor.
     type Executor = cosmic::executor::Default;
     // Config data type for init function.
-    // TODO: Add configuration.
-    type Flags = ();
+    type Flags = Config;
     type Message = Message;
     const APP_ID: &'static str = "com.nick42d.CosmicAppletArch";
 
@@ -138,9 +132,10 @@ impl Application for CosmicAppletArch {
     // Core is passed by libcosmic, and caller can pass some state in Flags.
     // On load we can immediately run an async task by returning a Task as the
     // second component of the tuple.
-    fn init(core: Core, _flags: Self::Flags) -> (Self, Task<Self::Message>) {
+    fn init(core: Core, config: Self::Flags) -> (Self, Task<Self::Message>) {
         let app = CosmicAppletArch {
             core,
+            config: Arc::new(config),
             ..Default::default()
         };
         (app, Task::none())
