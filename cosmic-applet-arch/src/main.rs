@@ -10,6 +10,8 @@ use app::CosmicAppletArch;
 
 fn main() -> cosmic::iced::Result {
     core::localization::localize();
-    let config = futures::executor::block_on(core::config::get_config()).unwrap();
+    let rt =
+        tokio::runtime::Runtime::new().expect("Expected to be able to initiate a tokio runtime");
+    let config = rt.block_on(core::config::get_config()).unwrap();
     cosmic::applet::run::<CosmicAppletArch>(config)
 }

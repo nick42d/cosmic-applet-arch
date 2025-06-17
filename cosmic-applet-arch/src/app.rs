@@ -7,7 +7,6 @@ use cosmic::iced::window::Id;
 use cosmic::iced::Limits;
 use cosmic::{Application, Element};
 use std::sync::Arc;
-use std::time::Duration;
 use subscription::core::Updates;
 use view::Collapsed;
 
