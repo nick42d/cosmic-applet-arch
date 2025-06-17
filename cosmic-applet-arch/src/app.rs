@@ -29,6 +29,7 @@ pub struct CosmicAppletArch {
     devel_list_state: Collapsed,
     refresh_pressed_notifier: Arc<tokio::sync::Notify>,
     clear_news_pressed_notifier: Arc<tokio::sync::Notify>,
+    updates_refreshing: bool,
     news: NewsState,
     updates: UpdatesState,
     config: Arc<Config>,
@@ -339,10 +340,12 @@ impl CosmicAppletArch {
         Task::none()
     }
     fn handle_force_get_updates(&mut self) -> Task<Message> {
+        self.updates_refreshing = true;
         self.refresh_pressed_notifier.notify_one();
         Task::none()
     }
     fn handle_update_error(&mut self, error: String) -> Task<Message> {
+        self.updates_refreshing = false;
         let old = std::mem::take(&mut self.updates);
         self.updates = match old {
             UpdatesState::Init | UpdatesState::InitError { .. } => {
@@ -369,6 +372,7 @@ impl CosmicAppletArch {
         Task::none()
     }
     fn handle_updates(&mut self, updates: Updates, time: DateTime<Local>) -> Task<Message> {
+        self.updates_refreshing = false;
         // When first receiving updates, autosize will not trigger until the second
         // message is received. So, we intentionally bounce this message if it's
         // the first time updates have been received.
