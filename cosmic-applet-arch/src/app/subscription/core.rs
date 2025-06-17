@@ -1,3 +1,4 @@
+use crate::core::config::UpdateType;
 use crate::core::proj_dirs;
 use crate::news::{DatedNewsItem, NewsCache, WarnedResult};
 use anyhow::Context;
@@ -7,6 +8,7 @@ use arch_updates_rs::{
 };
 use chrono::{DateTime, Local};
 use futures::TryFutureExt;
+use std::collections::HashSet;
 use std::future::Future;
 use tokio::join;
 
@@ -46,8 +48,16 @@ pub struct Updates {
 }
 
 impl Updates {
-    pub fn total(&self) -> usize {
-        self.pacman.len() + self.aur.len() + self.devel.len()
+    /// Returns the total number of updates exluding the passed UpdateTypes.
+    pub fn total_filtered(&self, exclude_from_count: &HashSet<UpdateType>) -> usize {
+        let total_updates = |u: UpdateType| match u {
+            UpdateType::Aur => self.aur.len(),
+            UpdateType::Devel => self.devel.len(),
+            UpdateType::Pacman => self.pacman.len(),
+        };
+        HashSet::from([UpdateType::Aur, UpdateType::Devel, UpdateType::Pacman])
+            .difference(exclude_from_count)
+            .fold(0, |acc, e| acc + total_updates(*e))
     }
 }
 
