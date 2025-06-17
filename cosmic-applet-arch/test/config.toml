@@ -1,5 +1,0 @@
-exclude_from_counter = ["aur", "devel"]
-interval_secs = 30
-timeout_secs = 30
-online_check_period = 30
-other_repo_urls.endeavouros = "www.google.com"

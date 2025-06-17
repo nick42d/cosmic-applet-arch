@@ -10,6 +10,9 @@ use app::CosmicAppletArch;
 
 fn main() -> cosmic::iced::Result {
     core::localization::localize();
-
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let config = rt
+        .block_on(async { core::config::get_config().await })
+        .unwrap();
     cosmic::applet::run::<CosmicAppletArch>(())
 }
