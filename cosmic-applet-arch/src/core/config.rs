@@ -53,10 +53,13 @@ pub async fn get_config() -> anyhow::Result<Config> {
         .context("Unable to create config directory")?;
     let mut config_file_path = config_dir.to_path_buf();
     config_file_path.push(CONFIG_FILE_NAME);
-    let file = tokio::fs::read_to_string(config_file_path)
-        .await
-        .context("Unable to read config file")?;
-    toml::from_str(&file).context("Invalid config file")
+
+    // Use default config if there is no config file.
+    match tokio::fs::read_to_string(config_file_path).await {
+        Ok(file) => toml::from_str(&file).context("Invalid config file"),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Config::default()),
+        Err(e) => Err(e).context("IO error reading config file"),
+    }
 }
 
 #[cfg(test)]
