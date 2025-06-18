@@ -1,5 +1,6 @@
 use super::AppIcon;
 use crate::app::Message;
+use crate::core::config::Config;
 use crate::fl;
 use crate::news::DatedNewsItem;
 use arch_updates_rs::{AurUpdate, DevelUpdate, PacmanUpdate, SourceRepo};
@@ -7,6 +8,7 @@ use cosmic::iced::alignment::{Horizontal, Vertical};
 use cosmic::iced::Length;
 use cosmic::widget::{JustifyContent, Widget};
 use cosmic::{theme, Element};
+use std::collections::HashMap;
 use std::fmt::Display;
 
 #[derive(Default)]
@@ -249,16 +251,15 @@ impl DisplayPackage {
     pub fn pretty_print_version_change(&self) -> String {
         format!("{}->{}", self.display_ver_old, self.display_ver_new)
     }
-    pub fn from_pacman_update(update: &PacmanUpdate) -> Self {
+    pub fn from_pacman_update(update: &PacmanUpdate, config: &Config) -> Self {
         Self {
             display_ver_new: format!("{}-{}", update.pkgver_new, update.pkgrel_new),
             display_ver_old: format!("{}-{}", update.pkgver_cur, update.pkgrel_cur),
             source_repo: update.source_repo.as_ref().map(ToString::to_string),
             pkgname: update.pkgname.to_string(),
-            url: update
-                .source_repo
-                .clone()
-                .and_then(|source_repo| pacman_url(&update.pkgname, source_repo)),
+            url: update.source_repo.clone().and_then(|source_repo| {
+                pacman_url(&update.pkgname, source_repo, &config.other_repo_urls)
+            }),
         }
     }
     pub fn from_aur_update(update: &AurUpdate) -> Self {
@@ -286,9 +287,15 @@ fn aur_url(pkgname: &str) -> String {
     format!("https://aur.archlinux.org/packages/{pkgname}")
 }
 /// Get official Arch url for a package, if it's in one of the official repos.
-fn pacman_url(pkgname: &str, source_repo: SourceRepo) -> Option<String> {
-    if let SourceRepo::Other(_) = source_repo {
-        return None;
+fn pacman_url(
+    pkgname: &str,
+    source_repo: SourceRepo,
+    other_repo_urls: &HashMap<String, String>,
+) -> Option<String> {
+    if let SourceRepo::Other(other_repo_name) = source_repo {
+        return other_repo_urls
+            .get(&other_repo_name)
+            .map(|url_raw| url_raw.replace("{pkgname}", pkgname));
     }
     // NOTE: the webpage will automatically redirect a url with architecture
     // `x86_64` to `any` if needed, so it's safe to hardcode x86_64 in the url for
