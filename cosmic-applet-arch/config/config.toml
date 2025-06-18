@@ -19,7 +19,6 @@ online_check_period = 600
 # Any updates check taking longer than `timeout_secs` will be cancelled and error.
 timeout_secs = 120
 
-# NOT YET IMPLEMENTED
 # If you are using unofficial repositories, a package url can be provided.
 # {pkgname} will be replaced with the package name.
 # 
