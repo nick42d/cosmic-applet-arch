@@ -286,7 +286,13 @@ impl DisplayPackage {
 fn aur_url(pkgname: &str) -> String {
     format!("https://aur.archlinux.org/packages/{pkgname}")
 }
-/// Get official Arch url for a package, if it's in one of the official repos.
+
+/// Get official Arch url for a package if it's in one of the official repos.
+///
+/// The `other_repo_urls` is a HashMap or unofficial repo names and urls that
+/// the caller can provide. If its in an unofficial repo, and user has provided
+/// a url, return the caller provided url with {pgkname} replaced with the
+/// actual package name.
 fn pacman_url(
     pkgname: &str,
     source_repo: SourceRepo,
@@ -304,4 +310,73 @@ fn pacman_url(
     Some(format!(
         "https://archlinux.org/packages/{source_repo}/x86_64/{pkgname}/"
     ))
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::app::view::widgets::pacman_url;
+
+    #[tokio::test]
+    async fn test_pacman_url_with_other_repo() {
+        let other_repo_urls = [
+            (
+                "endeavouros".to_string(),
+                "https://github.com/endeavouros-team/PKGBUILDS/tree/master/{pkgname}".to_string(),
+            ),
+            (
+                "chaotic-aur".to_string(),
+                "https://gitlab.com/chaotic-aur/pkgbuilds/-/tree/main/{pkgname}".to_string(),
+            ),
+        ]
+        .into();
+        let url = pacman_url(
+            "cosmic-applet-arch",
+            arch_updates_rs::SourceRepo::Other("chaotic-aur".into()),
+            &other_repo_urls,
+        );
+        let url2 = pacman_url(
+            "cosmic-applet-arch",
+            arch_updates_rs::SourceRepo::Other("endeavouros".into()),
+            &other_repo_urls,
+        );
+        assert_eq!(
+            url.as_deref(),
+            Some("https://gitlab.com/chaotic-aur/pkgbuilds/-/tree/main/cosmic-applet-arch")
+        );
+        assert_eq!(
+            url2.as_deref(),
+            Some("https://github.com/endeavouros-team/PKGBUILDS/tree/master/cosmic-applet-arch")
+        );
+    }
+    #[tokio::test]
+    async fn test_pacman_url_with_other_repo_no_pkgname() {
+        let other_repo_urls = [(
+            "endeavouros".to_string(),
+            "https://github.com/endeavouros-team/PKGBUILDS/tree/master/".to_string(),
+        )]
+        .into();
+        let url = pacman_url(
+            "cosmic-applet-arch",
+            arch_updates_rs::SourceRepo::Other("endeavouros".into()),
+            &other_repo_urls,
+        );
+        assert_eq!(
+            url.as_deref(),
+            Some("https://github.com/endeavouros-team/PKGBUILDS/tree/master/")
+        );
+    }
+    #[tokio::test]
+    async fn test_pacman_url_with_other_repo_no_url() {
+        let other_repo_urls = [(
+            "endeavouros".to_string(),
+            "https://github.com/endeavouros-team/PKGBUILDS/tree/master/".to_string(),
+        )]
+        .into();
+        let url = pacman_url(
+            "cosmic-applet-arch",
+            arch_updates_rs::SourceRepo::Other("chaotic-aur".into()),
+            &other_repo_urls,
+        );
+        assert_eq!(url.as_deref(), None);
+    }
 }
