@@ -84,7 +84,7 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
         updates
             .pacman
             .iter()
-            .map(DisplayPackage::from_pacman_update),
+            .map(|pkg| DisplayPackage::from_pacman_update(pkg, &app.config)),
         &app.pacman_list_state,
         fl!(
             "updates-available",
