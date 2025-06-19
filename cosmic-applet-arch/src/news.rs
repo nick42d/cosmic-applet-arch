@@ -76,4 +76,7 @@ impl<T, W, E> WarnedResult<T, W, E> {
             WarnedResult::Err(e) => WarnedResult::Err(e),
         }
     }
+    pub fn is_ok(&self) -> bool {
+        matches!(self, WarnedResult::Ok(_))
+    }
 }
