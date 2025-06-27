@@ -323,7 +323,7 @@ impl CosmicAppletArch {
                 None,
             );
             popup_settings.positioner.size_limits = Limits::NONE
-                .max_width(444.0)
+                .max_width(500.0)
                 .min_width(300.0)
                 .min_height(200.0)
                 .max_height(1080.0);

@@ -11,22 +11,22 @@ futures = "0.3.31"
 i18n-embed-fl = "0.9.4"
 itertools = "0.14.0"
 open = "5.3.2"
-rust-embed = "8.7.0"
-tokio = { version = "1.44.2", features = ["full"] }
+rust-embed = "8.7.2"
+tokio = { version = "1.45.1", features = ["full"] }
 serde = { version = "1.0.219", features = ["derive"], optional = true }
 ron = { version = "0.8.1", optional = true }
 rss = "2.0.12"
-reqwest = "0.12.15"
+reqwest = "0.12.20"
 tokio-stream = { version = "0.1.17", features = ["io-util"] }
 directories = "6.0.0"
 anyhow = "1.0.98"
-rustix = {version = "1.0.5", features = ["fs"]}
+rustix = {version = "1.0.7", features = ["fs"]}
 
 [dependencies.libcosmic]
 git = "https://github.com/pop-os/libcosmic.git"
 # To keep builds reproducible, libcosmic should be pegged to a rev.
 # This should be updated periodically.
-rev = "12317d8"
+rev = "52b802a"
 default-features = false
 features = ["applet", "tokio", "wayland", "autosize"]
 
@@ -49,4 +49,4 @@ mock-api = ["serde", "ron", "chrono/serde"]
 
 [dev-dependencies]
 mockall = "0.13.1"
-tempfile = "3.19.1"
+tempfile = "3.20.0"
