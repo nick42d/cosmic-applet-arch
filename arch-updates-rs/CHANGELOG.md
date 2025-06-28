@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 
+## [0.2.1](https://github.com/nick42d/cosmic-applet-arch/compare/arch-updates-rs/v0.2.0...arch-updates-rs/v0.2.1) - 2025-04-30
+
+### Fixed
+- Resolve checkupdates errors when run in parallel ([#17](https://github.com/nick42d/cosmic-applet-arch/pull/17))
+
 ## [0.2.0](https://github.com/nick42d/cosmic-applet-arch/compare/arch-updates-rs/v0.1.2...arch-updates-rs/v0.2.0) - 2025-03-05
 
 ### Added

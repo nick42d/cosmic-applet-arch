@@ -9,5 +9,9 @@ mod news;
 use app::CosmicAppletArch;
 
 fn main() -> cosmic::iced::Result {
-    cosmic::applet::run::<CosmicAppletArch>(())
+    core::localization::localize();
+    let rt =
+        tokio::runtime::Runtime::new().expect("Expected to be able to initiate a tokio runtime");
+    let config = rt.block_on(core::config::get_config()).unwrap();
+    cosmic::applet::run::<CosmicAppletArch>(config)
 }

@@ -1,3 +1,4 @@
+use crate::core::config::UpdateType;
 use crate::core::proj_dirs;
 use crate::news::{DatedNewsItem, NewsCache, WarnedResult};
 use anyhow::Context;
@@ -7,6 +8,7 @@ use arch_updates_rs::{
 };
 use chrono::{DateTime, Local};
 use futures::TryFutureExt;
+use std::collections::HashSet;
 use std::future::Future;
 use tokio::join;
 
@@ -46,8 +48,16 @@ pub struct Updates {
 }
 
 impl Updates {
-    pub fn total(&self) -> usize {
-        self.pacman.len() + self.aur.len() + self.devel.len()
+    /// Returns the total number of updates exluding the passed UpdateTypes.
+    pub fn total_filtered(&self, exclude_from_count: &HashSet<UpdateType>) -> usize {
+        let total_updates = |u: UpdateType| match u {
+            UpdateType::Aur => self.aur.len(),
+            UpdateType::Devel => self.devel.len(),
+            UpdateType::Pacman => self.pacman.len(),
+        };
+        HashSet::from([UpdateType::Aur, UpdateType::Devel, UpdateType::Pacman])
+            .difference(exclude_from_count)
+            .fold(0, |acc, e| acc + total_updates(*e))
     }
 }
 
@@ -137,6 +147,9 @@ pub async fn get_updates_offline(cache: &CacheState) -> arch_updates_rs::Result<
 pub async fn check_pacman_updates_online_exclusive(
 ) -> anyhow::Result<(Vec<PacmanUpdate>, PacmanUpdatesCache)> {
     let proj_dirs = proj_dirs().context("Unable to obtain a local data storage directory")?;
+    tokio::fs::create_dir_all(proj_dirs.data_local_dir())
+        .await
+        .context("Unable to create local data storage directory")?;
     let lock_file_path = proj_dirs
         .data_local_dir()
         .to_path_buf()

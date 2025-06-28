@@ -45,7 +45,7 @@ pub fn view(app: &CosmicAppletArch) -> Element<Message> {
         UpdatesState::Init => AppIcon::Loading,
         UpdatesState::InitError { .. } | UpdatesState::Error { .. } => AppIcon::Error,
         UpdatesState::Received { value, .. } => {
-            if value.total() == 0 {
+            if value.total_filtered(&app.config.exclude_from_counter) == 0 {
                 AppIcon::UpToDate
             } else {
                 AppIcon::UpdatesAvailable
@@ -83,7 +83,7 @@ pub fn view(app: &CosmicAppletArch) -> Element<Message> {
             .on_press_down(Message::TogglePopup)
             .into();
     };
-    let total_updates = updates.total();
+    let total_updates = updates.total_filtered(&app.config.exclude_from_counter);
 
     // TODO: Set a width when layout is vertical, button should be same width as
     // others.
@@ -126,7 +126,7 @@ pub fn applet_icon(core: &Core, icon_type: AppIcon) -> cosmic::widget::Icon {
 }
 
 // Extension of applet context icon_button_from_handle function.
-pub fn applet_button_with_text<'a, Message: 'static>(
+pub fn applet_button_with_text<'a, Message: 'static + Clone>(
     core: &Core,
     icon: AppIcon,
     additional_icon: Option<AppIcon>,
