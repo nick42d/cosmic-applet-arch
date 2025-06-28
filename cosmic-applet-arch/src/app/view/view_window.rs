@@ -31,12 +31,23 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
         | UpdatesState::Error {
             last_checked_online,
             ..
-        } => Some(
-            cosmic::applet::menu_button(cosmic::widget::text::body(last_checked_string(
-                last_checked_online,
-            )))
-            .on_press(Message::ForceGetUpdates),
-        ),
+        } => {
+            let last_checked_text_widget =
+                cosmic::widget::text::body(last_checked_string(last_checked_online));
+            let last_checked_widget = if app.updates_refreshing {
+                let row = cosmic::widget::row()
+                    .spacing(space_xxs)
+                    .push(cosmic::widget::icon(
+                        cosmic::widget::icon::from_name("emblem-synchronizing-symbolic").handle(),
+                    ))
+                    .push(last_checked_text_widget);
+                cosmic::applet::menu_button(row).on_press(Message::ForceGetUpdates)
+            } else {
+                cosmic::applet::menu_button(last_checked_text_widget)
+                    .on_press(Message::ForceGetUpdates)
+            };
+            Some(last_checked_widget)
+        }
     };
     let loading_row = if matches!(
         app.updates,
@@ -73,7 +84,7 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
         updates
             .pacman
             .iter()
-            .map(DisplayPackage::from_pacman_update),
+            .map(|pkg| DisplayPackage::from_pacman_update(pkg, &app.config)),
         &app.pacman_list_state,
         fl!(
             "updates-available",

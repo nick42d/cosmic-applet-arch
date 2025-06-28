@@ -19,8 +19,12 @@ Please refer to `arch-updates-rs/README.md` for more information.
  - Set up to support localisation - to support your language please submit your `.ftl` translations to the `./cosmic-applet-arch/i18n/` directory.
  - Modular API `arch-updates-rs` - able to be used in other similar projects.
 
-## Development setup
+## Configuration
+- Some basic configuration options can be provided by creating the file `~/.config/cosmic-applet-arch/config.toml`.
+- An example configuration file with the default values is provided [in the repo](https://github.com/nick42d/cosmic-applet-arch/blob/main/cosmic-applet-arch/config/config.toml).
+- If an incorrect configuration file has been supplied the applet will crash. To view a descriptive error, run the applet in your terminal.
 
+## Development setup
 Development dependencies are listed on the [PKGBUILD in the AUR](https://aur.archlinux.org/cgit/aur.git/tree/PKGBUILD?h=cosmic-applet-arch)
 You can run the following commands to build and install:
 

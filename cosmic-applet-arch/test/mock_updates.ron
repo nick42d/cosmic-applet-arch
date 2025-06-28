@@ -6,10 +6,34 @@ MockUpdates(
             pkgrel_cur: "1",
             pkgver_new: "1.2.4",
             pkgrel_new: "1",
+            source_repo: Some(Core),
+        ),
+        MockPacmanUpdate(
+            pkgname: "eos-test",
+            pkgver_cur: "1.2.3",
+            pkgrel_cur: "1",
+            pkgver_new: "1.2.4",
+            pkgrel_new: "1",
+            source_repo: Some(Other("endeavouros")),
         )
     ],
-    aur: [],
-    devel: [],
+    aur: [
+        MockAurUpdate(
+            pkgname: "test-bin",
+            pkgver_cur: "1.2.3",
+            pkgrel_cur: "1",
+            pkgver_new: "1.2.4",
+            pkgrel_new: "1",
+        )
+    ],
+    devel: [
+        MockDevelUpdate(
+            pkgname: "test-git",
+            pkgver_cur: "1.2.3",
+            pkgrel_cur: "1",
+            ref_id_new: "98fh89",
+        )
+    ],
 )
 
 
