@@ -168,5 +168,15 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
         .push_maybe(news_divider)
         .push_maybe(news_row)
         .push_maybe(news_error_row);
-    app.core.applet.popup_container(content_list).into()
+    app.core
+        .applet
+        .popup_container(content_list)
+        .limits(
+            cosmic::iced::Limits::NONE
+                .min_height(200.)
+                .min_width(300.0)
+                .max_width(500.0)
+                .max_height(1080.0),
+        )
+        .into()
 }

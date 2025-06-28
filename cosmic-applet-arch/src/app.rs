@@ -318,7 +318,7 @@ impl CosmicAppletArch {
                 None,
             );
             popup_settings.positioner.size_limits = Limits::NONE
-                .max_width(444.0)
+                .max_width(500.0)
                 .min_width(300.0)
                 .min_height(200.0)
                 .max_height(1080.0);
@@ -377,10 +377,13 @@ impl CosmicAppletArch {
         // message is received. So, we intentionally bounce this message if it's
         // the first time updates have been received.
         let task = if matches!(self.updates, UpdatesState::Init) {
-            Task::done(cosmic::app::Message::App(Message::CheckUpdatesMsg {
-                updates: updates.clone(),
-                checked_online_time: time,
-            }))
+            Task::done(
+                Message::CheckUpdatesMsg {
+                    updates: updates.clone(),
+                    checked_online_time: time,
+                }
+                .into(),
+            )
         } else {
             Task::none()
         };
