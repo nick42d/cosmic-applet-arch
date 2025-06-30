@@ -53,6 +53,7 @@ use source_repo::{add_sources_to_updates, get_sources_list, SourcesList};
 use std::io;
 use std::str::Utf8Error;
 use thiserror::Error;
+use tokio::process::Command;
 
 mod get_updates;
 mod source_repo;
@@ -75,6 +76,8 @@ pub enum Error {
     Stdout(#[from] Utf8Error),
     #[error("Failed to get ignored packages")]
     GetIgnoredPackagesFailed,
+    #[error("Failed to get architecture")]
+    GetArchitectureFailed,
     #[error("Head identifier too short")]
     HeadIdentifierTooShort,
     #[error("Failed to get package from AUR `{0:?}`")]
@@ -227,11 +230,10 @@ pub async fn check_devel_updates_online() -> Result<(Vec<DevelUpdate>, DevelUpda
         // api call was succesful but the package wasn't found (ie, package is not an AUR package).
         .filter_map(|(pkg, maybe_srcinfo)| async { Some((pkg, maybe_srcinfo.transpose()?)) })
         .then(|(pkg, srcinfo)| async move {
+            let arch = get_arch().await?;
             let updates = srcinfo?
-                .base
-                .source
-                .into_iter()
-                .flat_map(move |arch| arch.vec.into_iter())
+                .source()
+                .arch(&arch)
                 .filter_map(|url| {
                     let url = parse_url(&url)?;
                     let PackageUrl { remote, branch, .. } = url;
@@ -438,4 +440,17 @@ mod tests {
         assert_eq!(online, offline);
         eprintln!("devel {:#?}", online);
     }
+}
+
+async fn get_arch() -> Result<String> {
+    let output = Command::new("pacman-conf")
+        .arg("Architecture")
+        .output()
+        .await?;
+    Ok(str::from_utf8(output.stdout.as_slice())
+        .map_err(|_| Error::GetIgnoredPackagesFailed)?
+        .lines()
+        .next()
+        .ok_or(Error::GetArchitectureFailed)?
+        .to_string())
 }
