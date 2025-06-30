@@ -310,13 +310,13 @@ mod tests {
     #[tokio::test]
     async fn test_get_url() {
         let srcinfo = get_aur_srcinfo("hyprlang-git").await.unwrap().unwrap();
-        let url = srcinfo.base.source.first().unwrap().vec.first().unwrap();
+        let url = srcinfo.base.source.all().next().unwrap();
         parse_url(url).unwrap();
     }
     #[tokio::test]
     async fn test_get_head() {
         let srcinfo = get_aur_srcinfo("hyprutils-git").await.unwrap().unwrap();
-        let url = srcinfo.base.source.first().unwrap().vec.first().unwrap();
+        let url = srcinfo.base.source.all().next().unwrap();
         let url_parsed = parse_url(url).unwrap();
         get_head_identifier(url_parsed.remote, url_parsed.branch)
             .await
