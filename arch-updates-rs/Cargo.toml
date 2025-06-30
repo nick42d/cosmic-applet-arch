@@ -2,7 +2,7 @@
 name = "arch-updates-rs"
 version = "0.2.2"
 edition = "2021"
-license = "MIT"
+license = "GPL-3.0"
 description = "Library to query arch linux packaging tools to see if updates are available."
 homepage = "https://github.com/nick42d/cosmic-applet-arch"
 repository = "https://github.com/nick42d/cosmic-applet-arch"
