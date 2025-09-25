@@ -40,20 +40,25 @@
 //! }
 //! ```
 use core::str;
-use futures::{future::try_join, stream::FuturesOrdered, StreamExt, TryStreamExt};
+use futures::future::try_join;
+use futures::stream::FuturesOrdered;
+use futures::{StreamExt, TryStreamExt};
 use get_updates::{
-    aur_update_due, devel_update_due, get_aur_packages, get_aur_srcinfo, get_devel_packages,
-    get_head_identifier, parse_update, parse_url, parse_ver_and_rel, PackageUrl,
+    aur_update_due, checkupdates, devel_update_due, get_aur_packages, get_aur_srcinfo,
+    get_devel_packages, get_head_identifier, parse_url, parse_ver_and_rel, CheckupdatesMode,
+    PackageUrl,
 };
 use raur::Raur;
 use source_repo::{add_sources_to_updates, get_sources_list, SourcesList};
-use std::{io, str::Utf8Error};
+use std::io;
+use std::str::Utf8Error;
 use thiserror::Error;
 use tokio::process::Command;
 
 mod get_updates;
-pub use source_repo::SourceRepo;
 mod source_repo;
+
+pub use source_repo::SourceRepo;
 
 /// Packages ending with one of the devel suffixes will be checked against the
 /// repository, as well as just the pkgver and pkgrel.
@@ -71,6 +76,8 @@ pub enum Error {
     Stdout(#[from] Utf8Error),
     #[error("Failed to get ignored packages")]
     GetIgnoredPackagesFailed,
+    #[error("Failed to get architecture")]
+    GetArchitectureFailed,
     #[error("Head identifier too short")]
     HeadIdentifierTooShort,
     #[error("Failed to get package from AUR `{0:?}`")]
@@ -143,6 +150,9 @@ pub struct DevelUpdatesCache(Vec<DevelUpdate>);
 ///  - Packages that are not up to date.
 ///  - Cache that can be stored in memory to make next query more efficient.
 ///
+/// # Note
+/// This will fail with an error if somebody else is running 'checkupdates' in
+/// sync mode at the same time.
 /// # Usage
 /// ```no_run
 /// # use arch_updates_rs::*;
@@ -153,22 +163,8 @@ pub struct DevelUpdatesCache(Vec<DevelUpdate>);
 /// assert!(updates.is_empty());
 /// # };
 pub async fn check_pacman_updates_online() -> Result<(Vec<PacmanUpdate>, PacmanUpdatesCache)> {
-    let parsed_updates = async {
-        let output = Command::new("checkupdates")
-            .arg("--nocolor")
-            .output()
-            .await?;
-        // Guard against stderr from checkupdates.
-        let stderr = str::from_utf8(output.stderr.as_slice())?;
-        if !stderr.is_empty() {
-            return Err(Error::CheckUpdatesReturnedError(stderr.to_owned()));
-        };
-        str::from_utf8(output.stdout.as_slice())?
-            .lines()
-            .map(parse_update)
-            .collect::<Result<Vec<_>>>()
-    };
-    let (parsed_updates, source_info) = try_join(parsed_updates, get_sources_list()).await?;
+    let (parsed_updates, source_info) =
+        try_join(checkupdates(CheckupdatesMode::Sync), get_sources_list()).await?;
     let updates = add_sources_to_updates(parsed_updates, &source_info);
     Ok((updates, PacmanUpdatesCache(source_info)))
 }
@@ -193,14 +189,7 @@ pub async fn check_pacman_updates_online() -> Result<(Vec<PacmanUpdate>, PacmanU
 /// assert!(offline.is_empty());
 /// # };
 pub async fn check_pacman_updates_offline(cache: &PacmanUpdatesCache) -> Result<Vec<PacmanUpdate>> {
-    let output = Command::new("checkupdates")
-        .args(["--nosync", "--nocolor"])
-        .output()
-        .await?;
-    let parsed_updates = str::from_utf8(output.stdout.as_slice())?
-        .lines()
-        .map(parse_update)
-        .collect::<Result<Vec<_>>>()?;
+    let parsed_updates = checkupdates(CheckupdatesMode::NoSync).await?;
     Ok(add_sources_to_updates(parsed_updates, &cache.0))
 }
 
@@ -230,6 +219,7 @@ pub async fn check_pacman_updates_offline(cache: &PacmanUpdatesCache) -> Result<
 /// assert!(updates.is_empty());
 /// # };
 pub async fn check_devel_updates_online() -> Result<(Vec<DevelUpdate>, DevelUpdatesCache)> {
+    let arch = get_arch().await?;
     let devel_packages = get_devel_packages().await?;
     let devel_updates = futures::stream::iter(devel_packages.into_iter())
         // Get the SRCINFO for each package (as Result<Option<_>>).
@@ -240,36 +230,37 @@ pub async fn check_devel_updates_online() -> Result<(Vec<DevelUpdate>, DevelUpda
         // Remove any None values from the list - these are where the aurweb
         // api call was succesful but the package wasn't found (ie, package is not an AUR package).
         .filter_map(|(pkg, maybe_srcinfo)| async { Some((pkg, maybe_srcinfo.transpose()?)) })
-        .then(|(pkg, srcinfo)| async move {
-            let updates = srcinfo?
-                .base
-                .source
-                .into_iter()
-                .flat_map(move |arch| arch.vec.into_iter())
-                .filter_map(|url| {
-                    let url = parse_url(&url)?;
-                    let PackageUrl { remote, branch, .. } = url;
-                    // This allocation isn't ideal, but it's here to work around lifetime issues
-                    // with nested streams that I've been unable to resolve. Spent a few hours on it
-                    // so far!
-                    Some((remote, branch.map(ToString::to_string)))
-                })
-                .map(move |(remote, branch)| {
-                    let pkgver_cur = pkg.pkgver.to_owned();
-                    let pkgrel_cur = pkg.pkgrel.to_owned();
-                    let pkgname = pkg.pkgname.to_owned();
-                    async move {
-                        let ref_id_new = get_head_identifier(remote, branch.as_deref()).await?;
-                        Ok::<_, crate::Error>(DevelUpdate {
-                            pkgname,
-                            pkgver_cur,
-                            ref_id_new,
-                            pkgrel_cur,
-                        })
-                    }
-                })
-                .collect::<FuturesOrdered<_>>();
-            Ok::<_, Error>(updates)
+        .then(|(pkg, srcinfo)| {
+            let arch = arch.clone();
+            async move {
+                let updates = srcinfo?
+                    .source()
+                    .arch(&arch)
+                    .filter_map(|url| {
+                        let url = parse_url(&url)?;
+                        let PackageUrl { remote, branch, .. } = url;
+                        // This allocation isn't ideal, but it's here to work around lifetime issues
+                        // with nested streams that I've been unable to resolve. Spent a few hours
+                        // on it so far!
+                        Some((remote, branch.map(ToString::to_string)))
+                    })
+                    .map(move |(remote, branch)| {
+                        let pkgver_cur = pkg.pkgver.to_owned();
+                        let pkgrel_cur = pkg.pkgrel.to_owned();
+                        let pkgname = pkg.pkgname.to_owned();
+                        async move {
+                            let ref_id_new = get_head_identifier(remote, branch.as_deref()).await?;
+                            Ok::<_, crate::Error>(DevelUpdate {
+                                pkgname,
+                                pkgver_cur,
+                                ref_id_new,
+                                pkgrel_cur,
+                            })
+                        }
+                    })
+                    .collect::<FuturesOrdered<_>>();
+                Ok::<_, Error>(updates)
+            }
         })
         .try_flatten()
         .try_collect::<Vec<_>>()
@@ -423,6 +414,19 @@ pub async fn check_aur_updates_offline(cache: &AurUpdatesCache) -> Result<Vec<Au
         .filter(aur_update_due)
         .collect();
     Ok(updates)
+}
+
+async fn get_arch() -> Result<String> {
+    let output = Command::new("pacman-conf")
+        .arg("Architecture")
+        .output()
+        .await?;
+    Ok(str::from_utf8(output.stdout.as_slice())
+        .map_err(|_| Error::GetIgnoredPackagesFailed)?
+        .lines()
+        .next()
+        .ok_or(Error::GetArchitectureFailed)?
+        .to_string())
 }
 
 #[cfg(test)]

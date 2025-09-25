@@ -1,9 +1,8 @@
+use super::core::Updates;
 use crate::news::{DatedNewsItem, WarnedResult};
 use arch_updates_rs::{AurUpdate, DevelUpdate, PacmanUpdate, SourceRepo};
 use chrono::FixedOffset;
 use serde::Deserialize;
-
-use super::core::Updates;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct MockDatedNewsItem {
@@ -166,4 +165,18 @@ pub async fn get_mock_news() -> WarnedResult<Vec<DatedNewsItem>, String, anyhow:
     let mock_news: Vec<MockDatedNewsItem> = ron::from_str(&file).unwrap();
     let news = mock_news.into_iter().map(Into::into).collect();
     WarnedResult::Ok(news)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::app::subscription::mock::{get_mock_news, get_mock_updates};
+
+    #[tokio::test]
+    async fn test_mock_updates_is_valid() {
+        get_mock_updates().await.unwrap();
+    }
+    #[tokio::test]
+    async fn test_mock_news_is_valid() {
+        assert!(get_mock_news().await.is_ok());
+    }
 }

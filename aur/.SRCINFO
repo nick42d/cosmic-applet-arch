@@ -1,6 +1,6 @@
 pkgbase = cosmic-applet-arch
 	pkgdesc = COSMIC applet to display Arch Linux package status
-	pkgver = 1.0.0.beta.9
+	pkgver = 1.0.0.beta.13
 	pkgrel = 1
 	url = https://github.com/nick42d/cosmic-applet-arch
 	arch = x86_64
@@ -15,7 +15,7 @@ pkgbase = cosmic-applet-arch
 	depends = pacman-contrib
 	depends = openssl
 	depends = libxkbcommon
-	source = git+https://github.com/nick42d/cosmic-applet-arch.git#tag=cosmic-applet-arch-v1.0.0.beta.9
-	b2sums = 560589bb03a93e3b0b2cbd0bff7d56a534c2e3ddddb03c7d416eb2d215a8e09babb0af319b56edae39a18543577f6660245b43270f49a44cccd50a1b4578716f
+	source = git+https://github.com/nick42d/cosmic-applet-arch.git#tag=cosmic-applet-arch-v1.0.0.beta.13
+	b2sums = bdd226cd36d73e7f6c4c967d33e1560bc737fd22a448cdae1e827ab7e01a1ee3dae4687fba4abacc6a5ab02d11a167f8ad4b8e25014403ffff9b0bee0c28d8bb
 
 pkgname = cosmic-applet-arch

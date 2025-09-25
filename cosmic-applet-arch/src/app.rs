@@ -1,3 +1,5 @@
+use crate::core::config::Config;
+use crate::news::{self, DatedNewsItem};
 use chrono::{DateTime, Local};
 use cosmic::app::{Core, Task};
 use cosmic::iced::platform_specific::shell::wayland::commands::popup::{destroy_popup, get_popup};
@@ -5,22 +7,15 @@ use cosmic::iced::window::Id;
 use cosmic::iced::Limits;
 use cosmic::{Application, Element};
 use std::sync::Arc;
-use std::time::Duration;
 use subscription::core::Updates;
 use view::Collapsed;
 
-use crate::news::{self, DatedNewsItem};
-
+// See module docs.
+#[cfg(all(unix, not(target_os = "solaris")))]
+mod async_file_lock;
 mod subscription;
 mod view;
 
-/// How often to compare current packages with the latest version in memory.
-const INTERVAL: Duration = Duration::from_secs(6);
-/// How long the api call can run without triggering a timeout.
-const TIMEOUT: Duration = Duration::from_secs(60 * 2);
-/// Every `CYCLES` number of `INTERVAL`s (starting at the first interval), the
-/// system will update the latest version in memory from the internet.
-const CYCLES: usize = 600;
 const SUBSCRIPTION_BUF_SIZE: usize = 10;
 
 #[derive(Default)]
@@ -34,8 +29,10 @@ pub struct CosmicAppletArch {
     devel_list_state: Collapsed,
     refresh_pressed_notifier: Arc<tokio::sync::Notify>,
     clear_news_pressed_notifier: Arc<tokio::sync::Notify>,
+    updates_refreshing: bool,
     news: NewsState,
     updates: UpdatesState,
+    config: Arc<Config>,
 }
 
 #[derive(Default, Debug)]
@@ -116,8 +113,7 @@ impl Application for CosmicAppletArch {
     // Use the default Cosmic executor.
     type Executor = cosmic::executor::Default;
     // Config data type for init function.
-    // TODO: Add configuration.
-    type Flags = ();
+    type Flags = Config;
     type Message = Message;
     const APP_ID: &'static str = "com.nick42d.CosmicAppletArch";
 
@@ -136,9 +132,10 @@ impl Application for CosmicAppletArch {
     // Core is passed by libcosmic, and caller can pass some state in Flags.
     // On load we can immediately run an async task by returning a Task as the
     // second component of the tuple.
-    fn init(core: Core, _flags: Self::Flags) -> (Self, Task<Self::Message>) {
+    fn init(core: Core, config: Self::Flags) -> (Self, Task<Self::Message>) {
         let app = CosmicAppletArch {
             core,
+            config: Arc::new(config),
             ..Default::default()
         };
         (app, Task::none())
@@ -321,7 +318,7 @@ impl CosmicAppletArch {
                 None,
             );
             popup_settings.positioner.size_limits = Limits::NONE
-                .max_width(444.0)
+                .max_width(500.0)
                 .min_width(300.0)
                 .min_height(200.0)
                 .max_height(1080.0);
@@ -343,10 +340,12 @@ impl CosmicAppletArch {
         Task::none()
     }
     fn handle_force_get_updates(&mut self) -> Task<Message> {
+        self.updates_refreshing = true;
         self.refresh_pressed_notifier.notify_one();
         Task::none()
     }
     fn handle_update_error(&mut self, error: String) -> Task<Message> {
+        self.updates_refreshing = false;
         let old = std::mem::take(&mut self.updates);
         self.updates = match old {
             UpdatesState::Init | UpdatesState::InitError { .. } => {
@@ -373,14 +372,18 @@ impl CosmicAppletArch {
         Task::none()
     }
     fn handle_updates(&mut self, updates: Updates, time: DateTime<Local>) -> Task<Message> {
+        self.updates_refreshing = false;
         // When first receiving updates, autosize will not trigger until the second
         // message is received. So, we intentionally bounce this message if it's
         // the first time updates have been received.
         let task = if matches!(self.updates, UpdatesState::Init) {
-            Task::done(cosmic::app::Message::App(Message::CheckUpdatesMsg {
-                updates: updates.clone(),
-                checked_online_time: time,
-            }))
+            Task::done(
+                Message::CheckUpdatesMsg {
+                    updates: updates.clone(),
+                    checked_online_time: time,
+                }
+                .into(),
+            )
         } else {
             Task::none()
         };

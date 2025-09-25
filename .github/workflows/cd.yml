@@ -17,7 +17,7 @@ defaults:
 jobs:
   upload-to-aur-test:
     name: Upload to AUR test
-    if: startsWith(github.event.release.name, 'cosmic-applet-arch/v')
+    if: startsWith(github.event.release.name, 'cosmic-applet-arch-v')
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
