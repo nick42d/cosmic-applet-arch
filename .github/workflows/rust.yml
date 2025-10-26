@@ -21,7 +21,7 @@ jobs:
         pacman -Syu fakeroot rust pacman-contrib pkgconf libxkbcommon git just lld --noconfirm --needed
 
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
     
     - name: Build
       run: cargo build --verbose
