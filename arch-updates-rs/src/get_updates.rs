@@ -149,8 +149,8 @@ pub async fn get_aur_packages() -> Result<Vec<Package>> {
 /// A devel package is a foreign package ending with one of the
 /// `DEVEL_SUFFIXES`.
 pub async fn get_devel_packages() -> Result<Vec<Package>> {
-    let aur_packages = get_aur_packages().await?;
-    Ok(aur_packages
+    let foreign_packages = get_foreign_packages().await?;
+    Ok(foreign_packages
         .into_iter()
         .filter(|package| {
             DEVEL_SUFFIXES
