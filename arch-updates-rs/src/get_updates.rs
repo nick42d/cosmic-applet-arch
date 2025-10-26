@@ -77,28 +77,6 @@ async fn get_ignored_packages() -> Result<Vec<String>> {
         .collect())
 }
 
-/// Get a list of all local packages on the system that are not managed by
-/// pacman. This is all packages returned by `pacman -Qm` excluding ignored
-/// packages.
-async fn get_foreign_packages() -> Result<Vec<Package>> {
-    let (ignored_packages, output) = futures::join!(
-        get_ignored_packages(),
-        Command::new("pacman").arg("-Qm").output()
-    );
-    let ignored_packages = ignored_packages?;
-    str::from_utf8(output?.stdout.as_slice())
-        .map_err(|_| Error::GetIgnoredPackagesFailed)?
-        .lines()
-        // Filter out any ignored packages
-        .filter(|line| {
-            !ignored_packages
-                .iter()
-                .any(|ignored_package| line.contains(ignored_package))
-        })
-        .map(parse_pacman_qm)
-        .collect()
-}
-
 /// Wrapper around external 'checkupdates' tool.
 /// # Note
 /// This will fail if somebody else is running 'checkupdates' in sync mode at
@@ -130,24 +108,30 @@ pub async fn checkupdates(mode: CheckupdatesMode) -> Result<Vec<ParsedUpdate>> {
         .collect::<Result<Vec<_>>>()
 }
 
-/// Get a list of all AUR packages on the system.
-/// An AUR package is a foreign package not ending with one of the
-/// `DEVEL_SUFFIXES`.
+/// Get a list of all aur packages on the system.
+/// An AUR package is a package returned by `pacman -Qm` excluding ignored
+/// packages.
 pub async fn get_aur_packages() -> Result<Vec<Package>> {
-    let foreign_packages = get_foreign_packages().await?;
-    Ok(foreign_packages
-        .into_iter()
-        .filter(|package| {
-            !DEVEL_SUFFIXES
+    let (ignored_packages, output) = futures::join!(
+        get_ignored_packages(),
+        Command::new("pacman").arg("-Qm").output()
+    );
+    let ignored_packages = ignored_packages?;
+    str::from_utf8(output?.stdout.as_slice())
+        .map_err(|_| Error::GetIgnoredPackagesFailed)?
+        .lines()
+        // Filter out any ignored packages
+        .filter(|line| {
+            !ignored_packages
                 .iter()
-                .any(|suffix| package.pkgname.to_lowercase().contains(suffix))
+                .any(|ignored_package| line.contains(ignored_package))
         })
-        .collect())
+        .map(parse_pacman_qm)
+        .collect()
 }
 
 /// Get a list of all devel packages on the system.
-/// A devel package is a foreign package ending with one of the
-/// `DEVEL_SUFFIXES`.
+/// A devel package is an AUR package ending with one of the `DEVEL_SUFFIXES`.
 pub async fn get_devel_packages() -> Result<Vec<Package>> {
     let aur_packages = get_aur_packages().await?;
     Ok(aur_packages
