@@ -39,17 +39,9 @@ pub struct CosmicAppletArch {
 pub enum UpdatesState {
     #[default]
     Init,
-    InitError {
-        error: String,
-    },
-    Received {
+    Running {
         last_checked_online: chrono::DateTime<Local>,
         value: Updates,
-    },
-    Error {
-        last_checked_online: chrono::DateTime<Local>,
-        last_value: Updates,
-        error: String,
     },
 }
 

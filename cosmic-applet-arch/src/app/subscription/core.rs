@@ -42,9 +42,36 @@ pub struct CacheState {
 
 #[derive(Clone, Debug, Default)]
 pub struct Updates {
-    pub pacman: Vec<PacmanUpdate>,
-    pub aur: Vec<AurUpdate>,
-    pub devel: Vec<DevelUpdate>,
+    pub pacman: ErrorVecWithHistory<PacmanUpdate>,
+    pub aur: ErrorVecWithHistory<AurUpdate>,
+    pub devel: ErrorVecWithHistory<DevelUpdate>,
+    pub last_updated: Option<chrono::DateTime<Local>>,
+}
+
+/// Shortcut for Vec<T,E> where previous state can be remembered as variant
+/// `ErrorWithHistory`
+#[derive(Clone, Debug)]
+pub enum ErrorVecWithHistory<T> {
+    Ok { value: Vec<T> },
+    Error { error: String },
+    ErrorWithHistory { last_value: Vec<T>, error: String },
+}
+
+impl<T> ErrorVecWithHistory<T> {
+    /// Returns length of the vector if it's in OK state, otherwise 0.
+    fn len(&self) -> usize {
+        if let ErrorVecWithHistory::Ok { value } = self {
+            value.len()
+        } else {
+            0
+        }
+    }
+}
+
+impl<T> Default for ErrorVecWithHistory<T> {
+    fn default() -> Self {
+        Self::Ok { value: vec![] }
+    }
 }
 
 impl Updates {
@@ -160,26 +187,26 @@ pub async fn check_pacman_updates_online_exclusive(
     Ok(check_pacman_updates_online().await?)
 }
 
-pub async fn get_updates_online() -> anyhow::Result<(Updates, CacheState)> {
-    let (pacman, aur, devel) = join!(
-        // arch_updates_rs::check_pacman_updates_online doesn't handle multiple concurrent
-        // processes.
-        check_pacman_updates_online_exclusive(),
-        arch_updates_rs::check_aur_updates_online(),
-        arch_updates_rs::check_devel_updates_online(),
-    );
-    let (pacman, pacman_cache) = pacman?;
-    let (aur, aur_cache) = aur?;
-    let (devel, devel_cache) = devel?;
-    Ok((
-        Updates { pacman, aur, devel },
-        CacheState {
-            aur_cache,
-            devel_cache,
-            pacman_cache,
-        },
-    ))
-}
+// pub async fn get_updates_online(prev_val: Updates) ->
+// anyhow::Result<(Updates, CacheState)> {     let (pacman, aur, devel) = join!(
+//         // arch_updates_rs::check_pacman_updates_online doesn't handle
+// multiple concurrent         // processes.
+//         check_pacman_updates_online_exclusive(),
+//         arch_updates_rs::check_aur_updates_online(),
+//         arch_updates_rs::check_devel_updates_online(),
+//     );
+//     let (pacman, pacman_cache) = pacman?;
+//     let (aur, aur_cache) = aur?;
+//     let (devel, devel_cache) = devel?;
+//     Ok((
+//         Updates { pacman, aur, devel },
+//         CacheState {
+//             aur_cache,
+//             devel_cache,
+//             pacman_cache,
+//         },
+//     ))
+// }
 
 #[cfg(test)]
 mod tests {

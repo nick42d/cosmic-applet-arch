@@ -1,14 +1,62 @@
 use super::messages_to_app::{send_update, send_update_error};
 use super::Message;
 use crate::app::subscription::core::{
-    flat_erased_timeout, get_updates_offline, get_updates_online, CheckType, OnlineUpdateResidual,
+    check_pacman_updates_online_exclusive, flat_erased_timeout, get_updates_offline, get_updates_online, CheckType, ErrorVecWithHistory, OnlineUpdateResidual
 };
 use crate::core::config::Config;
+use arch_updates_rs::{AurUpdatesCache, DevelUpdatesCache, PacmanUpdatesCache};
 use chrono::Local;
 use cosmic::iced::futures::channel::mpsc;
+use futures::join;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Notify;
+
+enum UpdatesWorkerState {
+    Init,
+    CheckedOnline {
+        pacman_cache: Option<PacmanUpdatesCache>,
+        aur_cache: Option<AurUpdatesCache>,
+        devel_cache: Option<DevelUpdatesCache>,
+        last_online_check: chrono::DateTime<Local>,
+    },
+}
+
+async fn check_for_updates_online_and_send_to_app(
+    timeout: std::time::Duration,
+    mut tx: mpsc::Sender<Message>,
+) -> UpdatesWorkerState {
+    let (pacman, aur, devel) = join!(
+        // arch_updates_rs::check_pacman_updates_online doesn't handle multiple concurrent
+        // processes.
+        flat_erased_timeout(timeout, check_pacman_updates_online_exclusive()),
+        flat_erased_timeout(timeout, arch_updates_rs::check_aur_updates_online()),
+        flat_erased_timeout(timeout, arch_updates_rs::check_devel_updates_online()),
+    );
+    fn extract_update_and_cache(u: Result<(update, cache), E> ->
+        ErrorVecWithHistory
+    }
+    match pacman {
+        Ok(_) => todo!(),
+        Err(_) => todo!(),
+    };
+    match aur {
+        Ok(_) => todo!(),
+        Err(_) => todo!(),
+    };
+    match devel {
+        Ok(_) => todo!(),
+        Err(_) => todo!(),
+    };
+    send_update_error(&mut tx, e).await;
+    send_update(&mut tx, updates, now).await;
+    UpdatesWorkerState::CheckedOnline {
+        pacman_cache: (),
+        aur_cache: (),
+        devel_cache: (),
+        last_online_check: Local::now(),
+    }
+}
 
 pub async fn raw_updates_worker(
     mut tx: mpsc::Sender<Message>,
