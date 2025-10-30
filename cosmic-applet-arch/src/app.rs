@@ -1,5 +1,7 @@
+use crate::app::subscription::core::ErrorVecWithHistory;
 use crate::core::config::Config;
 use crate::news::{self, DatedNewsItem};
+use arch_updates_rs::{AurUpdate, DevelUpdate, PacmanUpdate};
 use chrono::{DateTime, Local};
 use cosmic::app::{Core, Task};
 use cosmic::iced::platform_specific::shell::wayland::commands::popup::{destroy_popup, get_popup};
@@ -41,7 +43,9 @@ pub enum UpdatesState {
     Init,
     Running {
         last_checked_online: chrono::DateTime<Local>,
-        value: Updates,
+        pacman: ErrorVecWithHistory<PacmanUpdate>,
+        aur: ErrorVecWithHistory<AurUpdate>,
+        devel: ErrorVecWithHistory<DevelUpdate>,
     },
 }
 

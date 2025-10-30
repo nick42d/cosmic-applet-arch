@@ -14,7 +14,7 @@ pub async fn send_update_error(tx: &mut mpsc::Sender<Message>, e: impl std::fmt:
         eprintln!("Error {e} sending Arch update status - maybe the applet has been dropped.")
     });
 }
-pub async fn send_update(
+pub async fn send_online_update(
     tx: &mut mpsc::Sender<Message>,
     updates: Updates,
     checked_online_time: DateTime<Local>,
