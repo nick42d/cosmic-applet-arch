@@ -7,6 +7,7 @@ use arch_updates_rs::{
     PacmanUpdate, PacmanUpdatesCache,
 };
 use chrono::{DateTime, Local};
+use cosmic::cosmic_config::Update;
 use futures::TryFutureExt;
 use std::collections::HashSet;
 use std::future::Future;
@@ -40,69 +41,114 @@ pub struct CacheState {
     devel_cache: DevelUpdatesCache,
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct Updates {
-    pub pacman: ErrorVecWithHistory<PacmanUpdate>,
-    pub aur: ErrorVecWithHistory<AurUpdate>,
-    pub devel: ErrorVecWithHistory<DevelUpdate>,
-    pub last_updated: Option<chrono::DateTime<Local>>,
+#[derive(Debug, Clone)]
+pub struct UpdatesError;
+
+#[derive(Clone, Debug)]
+pub struct OnlineUpdatesMessage {
+    pub pacman: Result<Vec<PacmanUpdate>, UpdatesError>,
+    pub aur: Result<Vec<AurUpdate>, UpdatesError>,
+    pub devel: Result<Vec<DevelUpdate>, UpdatesError>,
+    pub update_time: chrono::DateTime<Local>,
+}
+
+#[derive(Clone, Debug)]
+// If offline cache didn't exist, it's not an error.
+pub struct OfflineUpdatesMessage {
+    pub pacman: Option<Result<Vec<PacmanUpdate>, UpdatesError>>,
+    pub aur: Option<Result<Vec<AurUpdate>, UpdatesError>>,
+    pub devel: Option<Result<Vec<DevelUpdate>, UpdatesError>>,
 }
 
 /// Shortcut for Vec<T,E> where previous state can be remembered as variant
 /// `ErrorWithHistory`
 #[derive(Clone, Debug)]
-pub enum ErrorVecWithHistory<T> {
+pub enum ErrorVecWithHistory<T, E> {
     Ok { value: Vec<T> },
-    Error { error: String },
-    ErrorWithHistory { last_value: Vec<T>, error: String },
+    Error { error: E },
+    ErrorWithHistory { last_value: Vec<T>, error: E },
 }
 
-impl<T> ErrorVecWithHistory<T> {
+impl<T, E> ErrorVecWithHistory<T, E> {
     /// Returns length of the vector if it's in OK state, otherwise 0.
-    fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         if let ErrorVecWithHistory::Ok { value } = self {
             value.len()
         } else {
             0
         }
     }
+    pub fn new_from_result(value: Result<Vec<T>, E>) -> Self {
+        match value {
+            Ok(value) => ErrorVecWithHistory::Ok { value },
+            Err(error) => ErrorVecWithHistory::Error { error },
+        }
+    }
+    pub fn replace_with_result_preserving_history(self, value: Result<Vec<T>, E>) -> Self {
+        match self {
+            ErrorVecWithHistory::Ok { value: last_value } => match value {
+                Ok(value) => ErrorVecWithHistory::Ok { value },
+                Err(error) => ErrorVecWithHistory::ErrorWithHistory { last_value, error },
+            },
+            ErrorVecWithHistory::Error { error } => match value {
+                Ok(value) => ErrorVecWithHistory::Ok { value },
+                Err(error) => ErrorVecWithHistory::Error { error },
+            },
+            ErrorVecWithHistory::ErrorWithHistory { last_value, error } => match value {
+                Ok(value) => ErrorVecWithHistory::Ok { value },
+                Err(error) => ErrorVecWithHistory::ErrorWithHistory { last_value, error },
+            },
+        }
+    }
+    pub fn replace_with_option_result_preserving_history(
+        self,
+        value: Option<Result<Vec<T>, E>>,
+    ) -> Self {
+        let Some(value) = value else { return self };
+        match self {
+            ErrorVecWithHistory::Ok { value: last_value } => match value {
+                Ok(value) => ErrorVecWithHistory::Ok { value },
+                Err(error) => ErrorVecWithHistory::ErrorWithHistory { last_value, error },
+            },
+            ErrorVecWithHistory::Error { .. } => match value {
+                Ok(value) => ErrorVecWithHistory::Ok { value },
+                Err(error) => ErrorVecWithHistory::Error { error },
+            },
+            ErrorVecWithHistory::ErrorWithHistory { last_value, .. } => match value {
+                Ok(value) => ErrorVecWithHistory::Ok { value },
+                Err(error) => ErrorVecWithHistory::ErrorWithHistory { last_value, error },
+            },
+        }
+    }
 }
 
-impl<T> Default for ErrorVecWithHistory<T> {
+impl<T, E> Default for ErrorVecWithHistory<T, E> {
     fn default() -> Self {
         Self::Ok { value: vec![] }
     }
 }
 
-impl Updates {
-    /// Returns the total number of updates exluding the passed UpdateTypes.
-    pub fn total_filtered(&self, exclude_from_count: &HashSet<UpdateType>) -> usize {
-        let total_updates = |u: UpdateType| match u {
-            UpdateType::Aur => self.aur.len(),
-            UpdateType::Devel => self.devel.len(),
-            UpdateType::Pacman => self.pacman.len(),
-        };
-        HashSet::from([UpdateType::Aur, UpdateType::Devel, UpdateType::Pacman])
-            .difference(exclude_from_count)
-            .fold(0, |acc, e| acc + total_updates(*e))
-    }
+#[derive(Clone, Debug)]
+enum TimeoutError<E> {
+    Timeout,
+    Other(E),
 }
 
 /// Helper function - adds a timeout to a future that returns a result.
-/// Type erases the error by converting to string, avoiding nested results.
-pub async fn flat_erased_timeout<T, E, Fut>(
+pub async fn flat_timeout<T, E, Fut>(
     duration: std::time::Duration,
     f: Fut,
-) -> Result<T, String>
+) -> Result<T, TimeoutError<E>>
 where
     Fut: Future<Output = Result<T, E>>,
     E: std::fmt::Display,
 {
-    let res = tokio::time::timeout(duration, f.map_err(|e| format!("{e}")))
-        .map_err(|_| "API call timed out".to_string())
+    let res = tokio::time::timeout(duration, f)
+        .map_err(|_| TimeoutError::Timeout)
         .await;
     match res {
-        Ok(Err(e)) | Err(e) => Err(e),
+        Ok(Err(e)) => Err(TimeoutError::Other(e)),
+        Err(e) => Err(e),
         Ok(Ok(t)) => Ok(t),
     }
 }

@@ -1,4 +1,3 @@
-use super::core::Updates;
 use super::Message;
 use crate::news::DatedNewsItem;
 use chrono::{DateTime, Local};
@@ -16,17 +15,23 @@ pub async fn send_update_error(tx: &mut mpsc::Sender<Message>, e: impl std::fmt:
 }
 pub async fn send_online_update(
     tx: &mut mpsc::Sender<Message>,
-    updates: Updates,
-    checked_online_time: DateTime<Local>,
+    updates: super::core::OnlineUpdatesMessage,
 ) {
-    tx.send(Message::CheckUpdatesMsg {
-        updates,
-        checked_online_time,
-    })
-    .await
-    .unwrap_or_else(|e| {
-        eprintln!("Error {e} sending Arch update status - maybe the applet has been dropped.")
-    });
+    tx.send(Message::RefreshedUpdatesOnline { updates })
+        .await
+        .unwrap_or_else(|e| {
+            eprintln!("Error {e} sending Arch update status - maybe the applet has been dropped.")
+        });
+}
+pub async fn send_offline_update(
+    tx: &mut mpsc::Sender<Message>,
+    updates: super::core::OfflineUpdatesMessage,
+) {
+    tx.send(Message::RefreshedUpdatesOffline { updates })
+        .await
+        .unwrap_or_else(|e| {
+            eprintln!("Error {e} sending Arch update status - maybe the applet has been dropped.")
+        });
 }
 pub async fn send_news(
     tx: &mut mpsc::Sender<Message>,
