@@ -43,9 +43,12 @@ impl AppIcon {
 pub fn view(app: &CosmicAppletArch) -> Element<Message> {
     let icon = match &app.updates {
         UpdatesState::Init => AppIcon::Loading,
-        UpdatesState::InitError { .. } | UpdatesState::Error { .. } => AppIcon::Error,
-        UpdatesState::Received { value, .. } => {
-            if value.total_filtered(&app.config.exclude_from_counter) == 0 {
+        UpdatesState::Running { refreshing, .. } => {
+            if *refreshing {
+                AppIcon::Loading
+            } else if app.updates.has_errors() {
+                AppIcon::Error
+            } else if app.updates.total_filtered(&app.config.exclude_from_counter) == 0 {
                 AppIcon::UpToDate
             } else {
                 AppIcon::UpdatesAvailable
@@ -73,9 +76,7 @@ pub fn view(app: &CosmicAppletArch) -> Element<Message> {
     };
     // Seemed like I couldn't use a let-else here but I assume it will be possible
     // in future.
-    let updates = if let UpdatesState::Received { value: updates, .. } = &app.updates {
-        updates
-    } else {
+    if matches!(app.updates, UpdatesState::Init) {
         return app
             .core
             .applet
@@ -83,7 +84,7 @@ pub fn view(app: &CosmicAppletArch) -> Element<Message> {
             .on_press_down(Message::TogglePopup)
             .into();
     };
-    let total_updates = updates.total_filtered(&app.config.exclude_from_counter);
+    let total_updates = app.updates.total_filtered(&app.config.exclude_from_counter);
 
     // TODO: Set a width when layout is vertical, button should be same width as
     // others.
