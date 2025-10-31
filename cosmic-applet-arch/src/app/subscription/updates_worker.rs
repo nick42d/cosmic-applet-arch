@@ -1,9 +1,7 @@
-use super::messages_to_app::send_update_error;
 use super::Message;
 use crate::app::subscription::core::{
-    check_pacman_updates_online_exclusive, flat_timeout, get_updates_offline, CheckType,
-    ErrorVecWithHistory, OfflineUpdatesMessage, OnlineUpdateResidual, OnlineUpdatesMessage,
-    UpdatesError,
+    check_pacman_updates_online_exclusive, flat_timeout, CheckType, OfflineUpdatesMessage,
+    OnlineUpdatesMessage, UpdatesError,
 };
 use crate::app::subscription::messages_to_app::{send_offline_update, send_online_update};
 use crate::core::config::Config;
@@ -11,7 +9,6 @@ use arch_updates_rs::{AurUpdatesCache, DevelUpdatesCache, PacmanUpdatesCache};
 use chrono::Local;
 use cosmic::iced::futures::channel::mpsc;
 use futures::join;
-use std::error::Error;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Notify;
@@ -50,7 +47,7 @@ async fn check_for_updates_online_and_send_to_app(
         devel: devel_updates.map_err(|_| UpdatesError),
         update_time,
     };
-    send_online_update(&mut tx, updates, update_time).await;
+    send_online_update(tx, updates).await;
     UpdatesWorkerCacheState {
         pacman_cache,
         aur_cache,
@@ -60,7 +57,6 @@ async fn check_for_updates_online_and_send_to_app(
 
 async fn check_for_updates_offline_and_send_to_app(
     cache: &UpdatesWorkerCacheState,
-    timeout: std::time::Duration,
     tx: &mut mpsc::Sender<Message>,
 ) {
     let UpdatesWorkerCacheState {
@@ -83,7 +79,7 @@ async fn check_for_updates_offline_and_send_to_app(
     let aur = aur.map(|r| r.map_err(|_| UpdatesError));
     let devel = devel.map(|r| r.map_err(|_| UpdatesError));
     let updates = OfflineUpdatesMessage { pacman, aur, devel };
-    send_offline_update(&mut tx, updates).await;
+    send_offline_update(tx, updates).await;
 }
 
 pub async fn raw_updates_worker(
@@ -117,7 +113,7 @@ pub async fn raw_updates_worker(
                         cache_state = check_for_updates_online_and_send_to_app(timeout, &mut tx).await;
                     }
                     CheckType::Offline => {
-                        check_for_updates_offline_and_send_to_app(&cache_state, timeout, &mut tx).await;
+                        check_for_updates_offline_and_send_to_app(&cache_state,  &mut tx).await;
                     }
                 };
             }

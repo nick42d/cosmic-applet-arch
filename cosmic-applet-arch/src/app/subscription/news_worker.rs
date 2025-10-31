@@ -1,8 +1,7 @@
 use super::messages_to_app::{send_news, send_news_error};
 use super::Message;
 use crate::app::subscription::core::{
-    consume_warning, flat_erased_timeout, get_news_offline, get_news_online, CheckType,
-    OnlineNewsResidual,
+    consume_warning, flat_timeout, get_news_offline, get_news_online, CheckType, OnlineNewsResidual,
 };
 use crate::app::subscription::messages_to_app::send_news_clearing_error;
 use crate::core::config::Config;
@@ -41,7 +40,7 @@ pub async fn raw_news_worker(
                 }
                 match (&check_type, &residual) {
                     (CheckType::Online, _) => {
-                        match flat_erased_timeout(timeout, get_news_online().map(consume_warning)).await {
+                        match flat_timeout(timeout, get_news_online().map(consume_warning)).await {
                             Err(e) => {
                                 residual = None;
                                 send_news_error(&mut tx, e).await;
@@ -55,7 +54,7 @@ pub async fn raw_news_worker(
                         }
                     }
                     (CheckType::Offline, Some(residual)) => {
-                        match flat_erased_timeout(timeout, get_news_offline(&residual.cache).map(consume_warning)).await {
+                        match flat_timeout(timeout, get_news_offline(&residual.cache).map(consume_warning)).await {
                             Err(e) => {
                                 send_news_error(&mut tx, e).await;
                                 continue;
@@ -67,6 +66,7 @@ pub async fn raw_news_worker(
                     (CheckType::Offline, None) => continue,
                 };
             }
+            // User has manually triggered refresh.
             _ = notified => {
                 counter = 1;
                 // Don't allow user to clear news if we haven't checked online yet (shouldn't be literally possible...)
@@ -81,7 +81,7 @@ pub async fn raw_news_worker(
                 }
                 // The theory here, is that by running a get_news right after a set_news, this will clear the news (if there isn't any new on the server).
                 // Otherwise, it will send the latest news (which, if we don't do here, is just going to trigger on the next online refresh anyway).
-                match flat_erased_timeout(timeout, get_news_online().map(consume_warning)).await {
+                match flat_timeout(timeout, get_news_online().map(consume_warning)).await {
                     Err(e) => {
                         residual = None;
                         send_news_error(&mut tx, e).await;

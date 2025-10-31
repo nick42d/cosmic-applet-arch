@@ -1,16 +1,13 @@
-use crate::app::subscription::core::{
-    ErrorVecWithHistory, OfflineUpdatesMessage, OnlineUpdatesMessage, UpdatesError,
-};
-use crate::core::config::{Config, UpdateType};
+use crate::app::subscription::core::{OfflineUpdatesMessage, OnlineUpdatesMessage};
+use crate::app::updates_state::UpdatesState;
+use crate::core::config::Config;
 use crate::news::{self, DatedNewsItem};
-use arch_updates_rs::{AurUpdate, DevelUpdate, PacmanUpdate};
 use chrono::{DateTime, Local};
 use cosmic::app::{Core, Task};
 use cosmic::iced::platform_specific::shell::wayland::commands::popup::{destroy_popup, get_popup};
 use cosmic::iced::window::Id;
 use cosmic::iced::Limits;
 use cosmic::{Application, Element};
-use std::collections::HashSet;
 use std::sync::Arc;
 use view::Collapsed;
 
@@ -18,6 +15,7 @@ use view::Collapsed;
 #[cfg(all(unix, not(target_os = "solaris")))]
 mod async_file_lock;
 mod subscription;
+mod updates_state;
 mod view;
 
 const SUBSCRIPTION_BUF_SIZE: usize = 10;
@@ -33,45 +31,9 @@ pub struct CosmicAppletArch {
     devel_list_state: Collapsed,
     refresh_pressed_notifier: Arc<tokio::sync::Notify>,
     clear_news_pressed_notifier: Arc<tokio::sync::Notify>,
-    updates_refreshing: bool,
     news: NewsState,
     updates: UpdatesState,
     config: Arc<Config>,
-}
-
-#[derive(Default, Debug)]
-pub enum UpdatesState {
-    #[default]
-    Init,
-    Running {
-        last_checked_online: chrono::DateTime<Local>,
-        pacman: ErrorVecWithHistory<PacmanUpdate, UpdatesError>,
-        aur: ErrorVecWithHistory<AurUpdate, UpdatesError>,
-        devel: ErrorVecWithHistory<DevelUpdate, UpdatesError>,
-    },
-}
-
-impl UpdatesState {
-    /// Returns the total number of updates exluding the passed UpdateTypes.
-    pub fn total_filtered(&self, exclude_from_count: &HashSet<UpdateType>) -> usize {
-        let UpdatesState::Running {
-            last_checked_online,
-            pacman,
-            aur,
-            devel,
-        } = self
-        else {
-            return 0;
-        };
-        let total_updates = |u: UpdateType| match u {
-            UpdateType::Aur => aur.len(),
-            UpdateType::Devel => devel.len(),
-            UpdateType::Pacman => pacman.len(),
-        };
-        HashSet::from([UpdateType::Aur, UpdateType::Devel, UpdateType::Pacman])
-            .difference(exclude_from_count)
-            .fold(0, |acc, e| acc + total_updates(*e))
-    }
 }
 
 #[derive(Default, Debug)]
@@ -119,9 +81,6 @@ pub enum Message {
     CheckNewsErrorsMsg(String),
     ClearNewsMsg,
     ClearNewsErrorMsg,
-    CheckUpdatesErrorsMsg {
-        error_string: String,
-    },
     OpenUrl(String),
 }
 
@@ -181,13 +140,13 @@ impl Application for CosmicAppletArch {
             Message::TogglePopup => self.handle_toggle_popup(),
             Message::PopupClosed(id) => self.handle_popup_closed(id),
             Message::RefreshedUpdatesOnline { updates } => {
-                self.handle_updates(updates, checked_online_time)
+                self.updates.handle_online_updates(updates)
+            }
+            Message::RefreshedUpdatesOffline { updates } => {
+                self.updates.handle_offline_updates(updates)
             }
             Message::ForceGetUpdates => self.handle_force_get_updates(),
             Message::ToggleCollapsible(update_type) => self.handle_toggle_collapsible(update_type),
-            Message::CheckUpdatesErrorsMsg { error_string } => {
-                self.handle_update_error(error_string)
-            }
             Message::OpenUrl(url) => self.handle_open_url(url),
             Message::CheckNewsMsg {
                 news,
@@ -362,75 +321,8 @@ impl CosmicAppletArch {
         Task::none()
     }
     fn handle_force_get_updates(&mut self) -> Task<Message> {
-        self.updates_refreshing = true;
+        self.updates.set_refreshing();
         self.refresh_pressed_notifier.notify_one();
-        Task::none()
-    }
-    fn handle_online_updates(&mut self, updates: OnlineUpdatesMessage) -> Task<Message> {
-        self.updates_refreshing = false;
-        // When first receiving updates, autosize will not trigger until the second
-        // message is received. So, we intentionally bounce this message if it's
-        // the first time updates have been received.
-        let task = if matches!(self.updates, UpdatesState::Init) {
-            Task::done(
-                Message::RefreshedUpdatesOnline {
-                    updates: updates.clone(),
-                }
-                .into(),
-            )
-        } else {
-            Task::none()
-        };
-        let OnlineUpdatesMessage {
-            pacman,
-            aur,
-            devel,
-            update_time,
-        } = updates;
-        let prev_state = std::mem::take(&mut self.updates);
-        self.updates = match prev_state {
-            UpdatesState::Init => UpdatesState::Running {
-                last_checked_online: update_time,
-                pacman: ErrorVecWithHistory::new_from_result(pacman),
-                aur: ErrorVecWithHistory::new_from_result(aur),
-                devel: ErrorVecWithHistory::new_from_result(devel),
-            },
-            UpdatesState::Running {
-                pacman: prev_pacman,
-                aur: prev_aur,
-                devel: prev_devel,
-                ..
-            } => UpdatesState::Running {
-                last_checked_online: update_time,
-                pacman: prev_pacman.replace_with_result_preserving_history(pacman),
-                aur: prev_aur.replace_with_result_preserving_history(aur),
-                devel: prev_devel.replace_with_result_preserving_history(devel),
-            },
-        };
-        task
-    }
-    fn handle_offline_updates(&mut self, updates: OfflineUpdatesMessage) -> Task<Message> {
-        let OfflineUpdatesMessage { pacman, aur, devel } = updates;
-        let prev_state = std::mem::take(&mut self.updates);
-        self.updates = match prev_state {
-            UpdatesState::Init => {
-                eprintln!(
-                "WARNING: Offline update received by UI before it had received an online update"
-            );
-                prev_state
-            }
-            UpdatesState::Running {
-                pacman: prev_pacman,
-                aur: prev_aur,
-                devel: prev_devel,
-                last_checked_online,
-            } => UpdatesState::Running {
-                last_checked_online,
-                pacman: prev_pacman.replace_with_option_result_preserving_history(pacman),
-                aur: prev_aur.replace_with_option_result_preserving_history(aur),
-                devel: prev_devel.replace_with_option_result_preserving_history(devel),
-            },
-        };
         Task::none()
     }
 }

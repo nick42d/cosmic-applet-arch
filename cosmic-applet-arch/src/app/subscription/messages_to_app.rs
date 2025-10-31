@@ -4,15 +4,6 @@ use chrono::{DateTime, Local};
 use cosmic::iced::futures::channel::mpsc;
 use cosmic::iced::futures::SinkExt;
 
-pub async fn send_update_error(tx: &mut mpsc::Sender<Message>, e: impl std::fmt::Display) {
-    tx.send(Message::CheckUpdatesErrorsMsg {
-        error_string: format!("{e}"),
-    })
-    .await
-    .unwrap_or_else(|e| {
-        eprintln!("Error {e} sending Arch update status - maybe the applet has been dropped.")
-    });
-}
 pub async fn send_online_update(
     tx: &mut mpsc::Sender<Message>,
     updates: super::core::OnlineUpdatesMessage,

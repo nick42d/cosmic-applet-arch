@@ -10,6 +10,7 @@ use chrono::{DateTime, Local};
 use cosmic::cosmic_config::Update;
 use futures::TryFutureExt;
 use std::collections::HashSet;
+use std::fmt::Display;
 use std::future::Future;
 use tokio::join;
 
@@ -134,6 +135,15 @@ enum TimeoutError<E> {
     Other(E),
 }
 
+impl<E: std::fmt::Display> std::fmt::Display for TimeoutError<E> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TimeoutError::Timeout => write!(f, "Timeout occurred"),
+            TimeoutError::Other(e) => write!(f, "{e}"),
+        }
+    }
+}
+
 /// Helper function - adds a timeout to a future that returns a result.
 pub async fn flat_timeout<T, E, Fut>(
     duration: std::time::Duration,
@@ -186,7 +196,7 @@ pub async fn get_news_online(
 }
 
 #[cfg(feature = "mock-api")]
-pub async fn get_updates_offline(_: &CacheState) -> arch_updates_rs::Result<Updates> {
+pub async fn get_updates_offline(_: &CacheState) -> arch_updates_rs::Result<OfflineUpdatesMessage> {
     super::mock::get_mock_updates().await
 }
 
