@@ -1,4 +1,4 @@
-use crate::app::subscription::core::{OfflineUpdatesMessage, OnlineUpdatesMessage};
+use crate::app::subscription::core::{OfflineUpdates, OnlineUpdates};
 use crate::app::updates_state::UpdatesState;
 use crate::core::config::Config;
 use crate::news::{self, DatedNewsItem};
@@ -69,10 +69,11 @@ pub enum Message {
     ToggleCollapsible(CollapsibleType),
     PopupClosed(Id),
     RefreshedUpdatesOnline {
-        updates: OnlineUpdatesMessage,
+        updates: OnlineUpdates,
+        update_time: chrono::DateTime<Local>,
     },
     RefreshedUpdatesOffline {
-        updates: OfflineUpdatesMessage,
+        updates: OfflineUpdates,
     },
     CheckNewsMsg {
         news: Vec<news::DatedNewsItem>,
@@ -139,9 +140,10 @@ impl Application for CosmicAppletArch {
         match message {
             Message::TogglePopup => self.handle_toggle_popup(),
             Message::PopupClosed(id) => self.handle_popup_closed(id),
-            Message::RefreshedUpdatesOnline { updates } => {
-                self.updates.handle_online_updates(updates)
-            }
+            Message::RefreshedUpdatesOnline {
+                updates,
+                update_time,
+            } => self.updates.handle_online_updates(updates, update_time),
             Message::RefreshedUpdatesOffline { updates } => {
                 self.updates.handle_offline_updates(updates)
             }

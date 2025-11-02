@@ -6,17 +6,21 @@ use cosmic::iced::futures::SinkExt;
 
 pub async fn send_online_update(
     tx: &mut mpsc::Sender<Message>,
-    updates: super::core::OnlineUpdatesMessage,
+    updates: super::core::OnlineUpdates,
+    update_time: chrono::DateTime<Local>,
 ) {
-    tx.send(Message::RefreshedUpdatesOnline { updates })
-        .await
-        .unwrap_or_else(|e| {
-            eprintln!("Error {e} sending Arch update status - maybe the applet has been dropped.")
-        });
+    tx.send(Message::RefreshedUpdatesOnline {
+        updates,
+        update_time,
+    })
+    .await
+    .unwrap_or_else(|e| {
+        eprintln!("Error {e} sending Arch update status - maybe the applet has been dropped.")
+    });
 }
 pub async fn send_offline_update(
     tx: &mut mpsc::Sender<Message>,
-    updates: super::core::OfflineUpdatesMessage,
+    updates: super::core::OfflineUpdates,
 ) {
     tx.send(Message::RefreshedUpdatesOffline { updates })
         .await

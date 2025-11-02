@@ -89,20 +89,24 @@ pub fn view(app: &CosmicAppletArch) -> Element<Message> {
     // TODO: Set a width when layout is vertical, button should be same width as
     // others.
     cosmic::widget::autosize::autosize(
-        if total_updates > 0 {
+        if app.updates.has_errors() {
+            applet_button_with_text(
+                app.core(),
+                icon,
+                additional_icon,
+                format!("{total_updates}+"),
+            )
+        } else if total_updates > 0 {
             applet_button_with_text(
                 app.core(),
                 icon,
                 additional_icon,
                 format!("{total_updates}"),
             )
-            .on_press_down(Message::TogglePopup)
         } else {
-            app.core
-                .applet
-                .icon_button(icon.to_str())
-                .on_press_down(Message::TogglePopup)
-        },
+            app.core.applet.icon_button(icon.to_str())
+        }
+        .on_press_down(Message::TogglePopup),
         AUTOSIZE_MAIN_ID.clone(),
     )
     .into()

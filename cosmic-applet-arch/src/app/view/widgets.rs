@@ -45,17 +45,6 @@ pub fn cosmic_body_text_row(text: String) -> Element<'static, Message> {
     .into()
 }
 
-pub fn errors_row_widget(error: impl Display) -> Element<'static, Message> {
-    cosmic::widget::container(
-        cosmic::widget::text::body(fl!("warning-error", error = error.to_string()))
-            .width(Length::Fill)
-            .height(Length::Fixed(24.0))
-            .align_y(Vertical::Center),
-    )
-    .padding(cosmic::applet::menu_control_padding())
-    .into()
-}
-
 fn cosmic_collapsible_row_widget<'a>(
     contents: Element<'a, Message>,
     collapsed: &Collapsed,

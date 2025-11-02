@@ -8,10 +8,11 @@ use news_impl::{get_latest_arch_news, Network};
 mod latest_update;
 mod news_impl;
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 #[cfg_attr(feature = "mock-api", allow(dead_code))]
 pub struct NewsCache(Vec<DatedNewsItem>);
 
+#[cfg_attr(feature = "mock-api", allow(dead_code))]
 pub async fn get_news_online(
 ) -> WarnedResult<(Vec<DatedNewsItem>, NewsCache), String, anyhow::Error> {
     latest_update::get_latest_update(&Arch)

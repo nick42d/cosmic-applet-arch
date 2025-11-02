@@ -1,11 +1,49 @@
 use crate::app::view::{
-    cosmic_applet_divider, cosmic_body_text_row, errors_row_widget, news_available_widget,
-    updates_available_widget, AppIcon, DisplayPackage, MAX_NEWS_LINES, MAX_UPDATE_LINES,
+    cosmic_applet_divider, cosmic_body_text_row, news_available_widget, updates_available_widget,
+    AppIcon, DisplayPackage, MAX_NEWS_LINES, MAX_UPDATE_LINES,
 };
 use crate::app::{Message, NewsState, UpdatesState};
 use crate::{fl, CosmicAppletArch};
 use chrono::{DateTime, Local};
 use cosmic::{theme, Element};
+
+pub struct NewsRows<'a> {
+    news_row: Option<Element<'a, Message>>,
+    error_row: Option<Element<'a, Message>>,
+}
+
+pub fn get_news_rows(app: &CosmicAppletArch) -> NewsRows<'_> {
+    let mut error_row = None;
+    let news_row = match &app.news {
+        NewsState::Init => None,
+        NewsState::InitError { .. } => Some(cosmic_body_text_row(fl!("error-checking-news"))),
+        NewsState::Received { value, .. } => {
+            Some(news_available_widget(value.iter(), None, MAX_NEWS_LINES))
+        }
+        NewsState::Clearing { last_value, .. } => Some(news_available_widget(
+            last_value.iter(),
+            Some(AppIcon::Loading),
+            MAX_NEWS_LINES,
+        )),
+        NewsState::ClearingError { last_value, .. } => Some(news_available_widget(
+            last_value.iter(),
+            Some(AppIcon::Error),
+            MAX_NEWS_LINES,
+        )),
+        NewsState::Error { last_value, .. } => {
+            error_row = Some(cosmic_body_text_row(fl!("error-checking-news")));
+            Some(news_available_widget(
+                last_value.iter(),
+                None,
+                MAX_NEWS_LINES,
+            ))
+        }
+    };
+    NewsRows {
+        news_row,
+        error_row,
+    }
+}
 
 // view_window is what is displayed in the popup.
 pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Element<Message> {
@@ -18,23 +56,39 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
     let cosmic::cosmic_theme::Spacing {
         space_xxs, space_s, ..
     } = theme::active().cosmic().spacing;
+
     let content_list = cosmic::widget::column()
         .spacing(space_xxs)
         .padding([space_xxs, 0]);
 
+    let news_divider =
+        if last_checked_row.is_some() || loading_row.is_some() || errors_row.is_some() {
+            Some(cosmic_applet_divider(space_s).into())
+        } else {
+            None
+        };
+
+    match app.updates {
+        UpdatesState::Init => {}
+        UpdatesState::Running {
+            last_checked_online,
+            pacman,
+            aur,
+            devel,
+            refreshing,
+        } => {}
+    }
+
     let last_checked_row = match app.updates {
-        UpdatesState::Init | UpdatesState::InitError { .. } => None,
-        UpdatesState::Received {
+        UpdatesState::Init => None,
+        UpdatesState::Running {
             last_checked_online,
-            ..
-        }
-        | UpdatesState::Error {
-            last_checked_online,
+            refreshing,
             ..
         } => {
             let last_checked_text_widget =
                 cosmic::widget::text::body(last_checked_string(last_checked_online));
-            let last_checked_widget = if app.updates_refreshing {
+            let last_checked_widget = if refreshing {
                 let row = cosmic::widget::row()
                     .spacing(space_xxs)
                     .push(cosmic::widget::icon(
@@ -49,19 +103,10 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
             Some(last_checked_widget)
         }
     };
-    let loading_row = if matches!(
-        app.updates,
-        UpdatesState::Init | UpdatesState::InitError { .. }
-    ) {
+    let loading_row = if matches!(app.updates, UpdatesState::Init) {
         Some(cosmic_body_text_row(fl!("loading")))
     } else {
         None
-    };
-    let errors_row = match &app.updates {
-        UpdatesState::InitError { error } => Some(errors_row_widget(error)),
-        // NOTE: This could be a special case where the error is pressable.
-        UpdatesState::Error { error, .. } => Some(errors_row_widget(error)),
-        UpdatesState::Init | UpdatesState::Received { .. } => None,
     };
 
     let updates = match &app.updates {
@@ -116,41 +161,6 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
         Message::ToggleCollapsible(crate::app::CollapsibleType::Devel),
         MAX_UPDATE_LINES,
     );
-    let mut news_error_row = None;
-    let news_row = match &app.news {
-        NewsState::Init => None,
-        NewsState::InitError { error } => Some(errors_row_widget(error)),
-        NewsState::Received { value, .. } => {
-            Some(news_available_widget(value.iter(), None, MAX_NEWS_LINES))
-        }
-        NewsState::Clearing { last_value, .. } => Some(news_available_widget(
-            last_value.iter(),
-            Some(AppIcon::Loading),
-            MAX_NEWS_LINES,
-        )),
-        NewsState::ClearingError { last_value, .. } => Some(news_available_widget(
-            last_value.iter(),
-            Some(AppIcon::Error),
-            MAX_NEWS_LINES,
-        )),
-        NewsState::Error {
-            last_value, error, ..
-        } => {
-            news_error_row = Some(errors_row_widget(error));
-            Some(news_available_widget(
-                last_value.iter(),
-                None,
-                MAX_NEWS_LINES,
-            ))
-        }
-    };
-    let news_divider =
-        if last_checked_row.is_some() || loading_row.is_some() || errors_row.is_some() {
-            Some(cosmic_applet_divider(space_s).into())
-        } else {
-            None
-        };
-
     let total_updates = pm + aur + dev;
     let content_list = content_list
         .push_maybe((pm > 0).then_some(pacman_list))

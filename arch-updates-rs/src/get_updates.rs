@@ -255,7 +255,7 @@ pub fn parse_update(value: &str) -> Result<ParsedUpdate> {
 
 /// Parse source field from .SRCINFO
 // NOTE: This is from paru (GPL3)
-pub fn parse_url(source: &str) -> Option<PackageUrl> {
+pub fn parse_url(source: &str) -> Option<PackageUrl<'_>> {
     let url = source.splitn(2, "::").last().unwrap();
 
     if !url.starts_with("git") || !url.contains("://") {
