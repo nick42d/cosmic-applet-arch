@@ -73,9 +73,14 @@ pub enum ErrorVecWithHistory<T, E> {
 }
 
 impl<T, E> ErrorVecWithHistory<T, E> {
-    /// Returns length of the vector if it's in OK state, otherwise 0.
+    /// Returns length of the vector if it's in OK state or has history,
+    /// otherwise 0.
     pub fn len(&self) -> usize {
-        if let ErrorVecWithHistory::Ok { value } = self {
+        if let ErrorVecWithHistory::Ok { value }
+        | ErrorVecWithHistory::ErrorWithHistory {
+            last_value: value, ..
+        } = self
+        {
             value.len()
         } else {
             0
@@ -135,7 +140,7 @@ impl<T, E> Default for ErrorVecWithHistory<T, E> {
 }
 
 #[derive(Clone, Debug)]
-enum TimeoutError<E> {
+pub enum TimeoutError<E> {
     Timeout,
     Other(E),
 }

@@ -5,10 +5,10 @@ updates-available = { $numberUpdates ->
 }
 updates-available-with-error = { $numberUpdates ->
     [one] 1+ { $updateSource } update(s) available (error when last refreshed)
-   *[other]+ { $numberUpdates } { $updateSource } updates available (error when last refreshed)
+   *[other] { $numberUpdates }+ { $updateSource } updates available (error when last refreshed)
 }
 no-updates-available = No updates available.
-error-checking-updates = Error checking { $updateSource }
+error-checking-updates = Error checking { $updateSource } updates
 
 news = News since last update - Click to clear
 no-news = No news since last update.

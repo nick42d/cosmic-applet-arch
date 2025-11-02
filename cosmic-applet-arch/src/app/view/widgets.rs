@@ -11,7 +11,7 @@ use cosmic::{theme, Element};
 use std::collections::HashMap;
 use std::fmt::Display;
 
-#[derive(Default)]
+#[derive(Default, Copy, Clone)]
 pub enum Collapsed {
     #[default]
     Collapsed,
@@ -47,7 +47,7 @@ pub fn cosmic_body_text_row(text: String) -> Element<'static, Message> {
 
 fn cosmic_collapsible_row_widget<'a>(
     contents: Element<'a, Message>,
-    collapsed: &Collapsed,
+    collapsed: Collapsed,
     title: String,
     on_press_mesage: Message,
 ) -> Element<'a, Message> {
@@ -113,7 +113,7 @@ pub fn news_available_widget<'a>(
 
 pub fn updates_available_widget<'a>(
     package_list: impl ExactSizeIterator<Item = DisplayPackage> + 'a,
-    collapsed: &Collapsed,
+    collapsed: Collapsed,
     title: String,
     on_press_mesage: Message,
     max_items: usize,
