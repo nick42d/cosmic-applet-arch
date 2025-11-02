@@ -39,17 +39,24 @@ impl UpdatesState {
             .difference(exclude_from_count)
             .fold(0, |acc, e| acc + total_updates(*e))
     }
-    pub fn has_errors(&self) -> bool {
-        match self {
-            UpdatesState::Init => false,
-            UpdatesState::Running {
-                pacman, aur, devel, ..
-            } => {
-                !(matches!(pacman, ErrorVecWithHistory::Ok { .. })
-                    && matches!(aur, ErrorVecWithHistory::Ok { .. })
-                    && matches!(devel, ErrorVecWithHistory::Ok { .. }))
-            }
-        }
+    /// Returns true if any updates excluding the passed UpdateTypes have
+    /// errors.
+    pub fn has_errors_filtered(&self, exclude: &HashSet<UpdateType>) -> bool {
+        let UpdatesState::Running {
+            pacman, aur, devel, ..
+        } = self
+        else {
+            return false;
+        };
+        let has_error = |u: &UpdateType| match u {
+            UpdateType::Aur => !matches!(aur, ErrorVecWithHistory::Ok { .. }),
+            UpdateType::Devel => !matches!(devel, ErrorVecWithHistory::Ok { .. }),
+            UpdateType::Pacman => !matches!(pacman, ErrorVecWithHistory::Ok { .. }),
+        };
+        HashSet::from([UpdateType::Aur, UpdateType::Devel, UpdateType::Pacman])
+            .difference(exclude)
+            .into_iter()
+            .any(has_error)
     }
     pub fn get_refreshing(&self) -> bool {
         match self {
