@@ -1,4 +1,4 @@
-use crate::app::subscription::core::{ErrorVecWithHistory, UpdatesError};
+use crate::app::subscription::core::ErrorVecWithHistory;
 use crate::app::view::{
     cosmic_applet_divider, cosmic_body_text_row, news_available_widget, updates_available_widget,
     AppIcon, Collapsed, DisplayPackage, MAX_NEWS_LINES, MAX_UPDATE_LINES,
@@ -114,7 +114,7 @@ pub fn get_updates_view(app: &CosmicAppletArch) -> UpdatesView<'_> {
 }
 
 // view_window is what is displayed in the popup.
-pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Element<Message> {
+pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Element<'_, Message> {
     fn last_checked_string(t: DateTime<Local>) -> String {
         fl!(
             "last-checked",

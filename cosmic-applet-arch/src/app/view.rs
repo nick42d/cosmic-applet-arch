@@ -40,7 +40,7 @@ impl AppIcon {
 }
 
 // view is what is displayed in the toolbar when run as an applet.
-pub fn view(app: &CosmicAppletArch) -> Element<Message> {
+pub fn view(app: &CosmicAppletArch) -> Element<'_, Message> {
     let icon = match &app.updates {
         UpdatesState::Init => AppIcon::Loading,
         UpdatesState::Running { refreshing, .. } => {

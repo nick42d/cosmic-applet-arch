@@ -9,7 +9,6 @@ use cosmic::iced::Length;
 use cosmic::widget::{JustifyContent, Widget};
 use cosmic::{theme, Element};
 use std::collections::HashMap;
-use std::fmt::Display;
 
 #[derive(Default, Copy, Clone)]
 pub enum Collapsed {
