@@ -107,11 +107,15 @@ fn get_source_updates_view<T>(
     updates: &BasicResultWithHistory<Vec<T>>,
 ) -> SourceUpdatesView<'_, T> {
     match updates {
-        BasicResultWithHistory::Error => SourceUpdatesView::ErrorOnly,
         BasicResultWithHistory::Ok { value } => SourceUpdatesView::Updates {
             updates: value,
             has_error: false,
         },
+        BasicResultWithHistory::Error => SourceUpdatesView::ErrorOnly,
+        // No updates to show if history is empty...
+        BasicResultWithHistory::ErrorWithHistory { last_value } if last_value.is_empty() => {
+            SourceUpdatesView::ErrorOnly
+        }
         BasicResultWithHistory::ErrorWithHistory { last_value, .. } => SourceUpdatesView::Updates {
             updates: last_value,
             has_error: true,
