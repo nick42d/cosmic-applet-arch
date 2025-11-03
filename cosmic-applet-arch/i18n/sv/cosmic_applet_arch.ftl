@@ -4,15 +4,15 @@ updates-available = { $numberUpdates ->
                      *[other] { $numberUpdates } { $updateSource } uppdateringar tillgängliga
 }
 updates-available-with-error = { $numberUpdates ->
-    [one] 1+ { $updateSource } update(s) available (error when last refreshed)
-   *[other] { $numberUpdates }+ { $updateSource } updates available (error when last refreshed)
+    [one] 1+ { $updateSource } uppdatering(ar) tillgänglig(a) (fel vid senast uppdatering)
+   *[other] { $numberUpdates }+ { $updateSource } uppdateringar tillgängliga (fel vid senast uppdatering)
 }
 no-updates-available = Inga uppdateringar tillgängliga.
-error-checking-updates = Error checking { $updateSource } updates
+error-checking-updates = Fel vid kontroll { $updateSource } uppdateringar
 
 news = Nyheter sedan senaste uppdateringen - klicka för att rensa
 no-news = Inga nyheter sedan senaste uppdateringen.
-error-checking-news = Error checking news
+error-checking-news = Fel vid kontroll av nyheter
 
 loading = Laddar...
 last-checked = Senast kontrollerat: { $dateTime } - klicka för att uppdatera
