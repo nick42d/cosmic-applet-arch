@@ -40,12 +40,18 @@ impl AppIcon {
 }
 
 // view is what is displayed in the toolbar when run as an applet.
-pub fn view(app: &CosmicAppletArch) -> Element<Message> {
+pub fn view(app: &CosmicAppletArch) -> Element<'_, Message> {
     let icon = match &app.updates {
         UpdatesState::Init => AppIcon::Loading,
-        UpdatesState::InitError { .. } | UpdatesState::Error { .. } => AppIcon::Error,
-        UpdatesState::Received { value, .. } => {
-            if value.total_filtered(&app.config.exclude_from_counter) == 0 {
+        UpdatesState::Running { refreshing, .. } => {
+            if *refreshing {
+                AppIcon::Loading
+            } else if app
+                .updates
+                .has_errors_filtered(&app.config.exclude_from_counter)
+            {
+                AppIcon::Error
+            } else if app.updates.total_filtered(&app.config.exclude_from_counter) == 0 {
                 AppIcon::UpToDate
             } else {
                 AppIcon::UpdatesAvailable
@@ -53,7 +59,7 @@ pub fn view(app: &CosmicAppletArch) -> Element<Message> {
         }
     };
     let additional_icon = match &app.news {
-        NewsState::Init | NewsState::InitError { .. } => None,
+        NewsState::Init | NewsState::InitError => None,
         NewsState::Received { value: news, .. }
         | NewsState::Clearing {
             last_value: news, ..
@@ -73,9 +79,7 @@ pub fn view(app: &CosmicAppletArch) -> Element<Message> {
     };
     // Seemed like I couldn't use a let-else here but I assume it will be possible
     // in future.
-    let updates = if let UpdatesState::Received { value: updates, .. } = &app.updates {
-        updates
-    } else {
+    if matches!(app.updates, UpdatesState::Init) {
         return app
             .core
             .applet
@@ -83,25 +87,32 @@ pub fn view(app: &CosmicAppletArch) -> Element<Message> {
             .on_press_down(Message::TogglePopup)
             .into();
     };
-    let total_updates = updates.total_filtered(&app.config.exclude_from_counter);
+    let has_errors = app
+        .updates
+        .has_errors_filtered(&app.config.exclude_from_counter);
+    let total_updates = app.updates.total_filtered(&app.config.exclude_from_counter);
 
     // TODO: Set a width when layout is vertical, button should be same width as
     // others.
     cosmic::widget::autosize::autosize(
-        if total_updates > 0 {
+        if has_errors && total_updates > 0 {
+            applet_button_with_text(
+                app.core(),
+                icon,
+                additional_icon,
+                format!("{total_updates}+"),
+            )
+        } else if total_updates > 0 {
             applet_button_with_text(
                 app.core(),
                 icon,
                 additional_icon,
                 format!("{total_updates}"),
             )
-            .on_press_down(Message::TogglePopup)
         } else {
-            app.core
-                .applet
-                .icon_button(icon.to_str())
-                .on_press_down(Message::TogglePopup)
-        },
+            app.core.applet.icon_button(icon.to_str())
+        }
+        .on_press_down(Message::TogglePopup),
         AUTOSIZE_MAIN_ID.clone(),
     )
     .into()

@@ -77,6 +77,28 @@ async fn get_ignored_packages() -> Result<Vec<String>> {
         .collect())
 }
 
+/// Get a list of all local packages on the system that are not managed by
+/// pacman. This is all packages returned by `pacman -Qm` excluding ignored
+/// packages.
+async fn get_foreign_packages() -> Result<Vec<Package>> {
+    let (ignored_packages, output) = futures::join!(
+        get_ignored_packages(),
+        Command::new("pacman").arg("-Qm").output()
+    );
+    let ignored_packages = ignored_packages?;
+    str::from_utf8(output?.stdout.as_slice())
+        .map_err(|_| Error::GetIgnoredPackagesFailed)?
+        .lines()
+        // Filter out any ignored packages
+        .filter(|line| {
+            !ignored_packages
+                .iter()
+                .any(|ignored_package| line.contains(ignored_package))
+        })
+        .map(parse_pacman_qm)
+        .collect()
+}
+
 /// Wrapper around external 'checkupdates' tool.
 /// # Note
 /// This will fail if somebody else is running 'checkupdates' in sync mode at
@@ -108,33 +130,27 @@ pub async fn checkupdates(mode: CheckupdatesMode) -> Result<Vec<ParsedUpdate>> {
         .collect::<Result<Vec<_>>>()
 }
 
-/// Get a list of all aur packages on the system.
-/// An AUR package is a package returned by `pacman -Qm` excluding ignored
-/// packages.
+/// Get a list of all AUR packages on the system.
+/// An AUR package is a foreign package not ending with one of the
+/// `DEVEL_SUFFIXES`.
 pub async fn get_aur_packages() -> Result<Vec<Package>> {
-    let (ignored_packages, output) = futures::join!(
-        get_ignored_packages(),
-        Command::new("pacman").arg("-Qm").output()
-    );
-    let ignored_packages = ignored_packages?;
-    str::from_utf8(output?.stdout.as_slice())
-        .map_err(|_| Error::GetIgnoredPackagesFailed)?
-        .lines()
-        // Filter out any ignored packages
-        .filter(|line| {
-            !ignored_packages
+    let foreign_packages = get_foreign_packages().await?;
+    Ok(foreign_packages
+        .into_iter()
+        .filter(|package| {
+            !DEVEL_SUFFIXES
                 .iter()
-                .any(|ignored_package| line.contains(ignored_package))
+                .any(|suffix| package.pkgname.to_lowercase().contains(suffix))
         })
-        .map(parse_pacman_qm)
-        .collect()
+        .collect())
 }
 
 /// Get a list of all devel packages on the system.
-/// A devel package is an AUR package ending with one of the `DEVEL_SUFFIXES`.
+/// A devel package is a foreign package ending with one of the
+/// `DEVEL_SUFFIXES`.
 pub async fn get_devel_packages() -> Result<Vec<Package>> {
-    let aur_packages = get_aur_packages().await?;
-    Ok(aur_packages
+    let foreign_packages = get_foreign_packages().await?;
+    Ok(foreign_packages
         .into_iter()
         .filter(|package| {
             DEVEL_SUFFIXES
@@ -239,7 +255,7 @@ pub fn parse_update(value: &str) -> Result<ParsedUpdate> {
 
 /// Parse source field from .SRCINFO
 // NOTE: This is from paru (GPL3)
-pub fn parse_url(source: &str) -> Option<PackageUrl> {
+pub fn parse_url(source: &str) -> Option<PackageUrl<'_>> {
     let url = source.splitn(2, "::").last().unwrap();
 
     if !url.starts_with("git") || !url.contains("://") {
