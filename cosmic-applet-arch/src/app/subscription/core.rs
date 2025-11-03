@@ -300,7 +300,6 @@ pub async fn get_updates_online(timeout: std::time::Duration) -> (OnlineUpdates,
         flat_timeout(timeout, arch_updates_rs::check_aur_updates_online()),
         flat_timeout(timeout, arch_updates_rs::check_devel_updates_online()),
     );
-    let update_time = Local::now();
     fn extract_cache_and_update<U, C, E>(update: Result<(U, C), E>) -> (Option<C>, Result<U, E>) {
         match update {
             Ok((update, cache)) => (Some(cache), Ok(update)),
