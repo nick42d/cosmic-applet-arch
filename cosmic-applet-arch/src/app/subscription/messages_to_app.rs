@@ -43,7 +43,7 @@ pub async fn send_news(
     });
 }
 pub async fn send_news_error(tx: &mut mpsc::Sender<Message>, e: impl std::fmt::Display) {
-    tx.send(Message::CheckNewsErrorsMsg(format!("{e}")))
+    tx.send(Message::CheckNewsErrorsMsg(format!("ERROR - news: {e}")))
         .await
         .unwrap_or_else(|e| {
             eprintln!("Error {e} sending Arch news status - maybe the applet has been dropped.")

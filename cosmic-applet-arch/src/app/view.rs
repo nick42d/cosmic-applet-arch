@@ -59,7 +59,7 @@ pub fn view(app: &CosmicAppletArch) -> Element<'_, Message> {
         }
     };
     let additional_icon = match &app.news {
-        NewsState::Init | NewsState::InitError { .. } => None,
+        NewsState::Init | NewsState::InitError => None,
         NewsState::Received { value: news, .. }
         | NewsState::Clearing {
             last_value: news, ..

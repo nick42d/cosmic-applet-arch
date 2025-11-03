@@ -77,7 +77,7 @@ impl<T, W, E> WarnedResult<T, W, E> {
             WarnedResult::Err(e) => WarnedResult::Err(e),
         }
     }
-    #[cfg(feature = "mock-api")]
+    #[cfg(all(feature = "mock-api", test))]
     pub fn is_ok(&self) -> bool {
         matches!(self, WarnedResult::Ok(_))
     }

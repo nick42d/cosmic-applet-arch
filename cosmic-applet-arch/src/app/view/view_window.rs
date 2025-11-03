@@ -23,7 +23,7 @@ enum NewsView<'a> {
 fn get_news_view(app: &CosmicAppletArch) -> NewsView<'_> {
     match &app.news {
         NewsState::Init => NewsView::Empty,
-        NewsState::InitError { .. } => NewsView::ErrorOnly,
+        NewsState::InitError => NewsView::ErrorOnly,
         NewsState::Received { value: news, .. } => NewsView::News {
             icon: None,
             news,

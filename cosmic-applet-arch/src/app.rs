@@ -40,9 +40,7 @@ pub struct CosmicAppletArch {
 pub enum NewsState {
     #[default]
     Init,
-    InitError {
-        error: String,
-    },
+    InitError,
     Received {
         last_checked_online: chrono::DateTime<Local>,
         value: Vec<news::DatedNewsItem>,
@@ -58,7 +56,6 @@ pub enum NewsState {
     Error {
         last_checked_online: chrono::DateTime<Local>,
         last_value: Vec<news::DatedNewsItem>,
-        error: String,
     },
 }
 
@@ -180,16 +177,16 @@ impl CosmicAppletArch {
     }
     fn handle_check_news_errors_msg(&mut self, e: String) -> Task<Message> {
         let old_news = std::mem::take(&mut self.news);
+        eprintln!("{e}");
         self.news = match old_news {
-            NewsState::Init => NewsState::InitError { error: e },
-            NewsState::InitError { .. } => NewsState::InitError { error: e },
+            NewsState::Init => NewsState::InitError,
+            NewsState::InitError => NewsState::InitError,
             NewsState::Received {
                 last_checked_online,
                 value,
             } => NewsState::Error {
                 last_checked_online,
                 last_value: value,
-                error: e,
             },
             NewsState::Clearing {
                 last_value,
@@ -200,7 +197,6 @@ impl CosmicAppletArch {
                 last_checked_online,
             } => NewsState::Error {
                 last_value,
-                error: e,
                 last_checked_online,
             },
             NewsState::Error {
@@ -209,7 +205,6 @@ impl CosmicAppletArch {
                 ..
             } => NewsState::Error {
                 last_value,
-                error: e,
                 last_checked_online,
             },
         };
@@ -218,8 +213,8 @@ impl CosmicAppletArch {
     fn handle_clear_news_msg(&mut self) -> Task<Message> {
         let old_news = std::mem::take(&mut self.news);
         self.news = match old_news {
-            NewsState::Init | NewsState::InitError { .. } => {
-                eprintln!("Warning: Tried to clear news, but there wasn't any");
+            NewsState::Init | NewsState::InitError => {
+                eprintln!("WARNING: Tried to clear news, but there wasn't any");
                 old_news
             }
             NewsState::Received {
@@ -245,7 +240,6 @@ impl CosmicAppletArch {
             },
             NewsState::Error {
                 last_value,
-                error: _,
                 last_checked_online,
             } => NewsState::Clearing {
                 last_value,
