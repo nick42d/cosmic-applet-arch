@@ -57,8 +57,7 @@ fn to_box_writer<T: AsyncWrite + Unpin + Send + 'static>(
 
 fn platform_local_last_read_path() -> std::io::Result<PathBuf> {
     Ok(proj_dirs()
-        .ok_or(std::io::Error::new(
-            std::io::ErrorKind::Other,
+        .ok_or(std::io::Error::other(
             "Unable to obtain a local data storage directory",
         ))?
         .data_local_dir()

@@ -1,4 +1,10 @@
-use crate::core::config::UpdateType;
+// NOTE: Conditional compilation has been used in this module to allow the
+// applet to be populated with mock data for testing.
+//
+// Development should be done considering that developers will have all features
+// enabled - ie unused code warnings triggered when `mock-api` feature is
+// enabled should be ignored.
+
 use crate::core::proj_dirs;
 use crate::news::{DatedNewsItem, NewsCache, WarnedResult};
 use anyhow::Context;
@@ -8,7 +14,6 @@ use arch_updates_rs::{
 };
 use chrono::{DateTime, Local};
 use futures::TryFutureExt;
-use std::collections::HashSet;
 use std::future::Future;
 use tokio::join;
 
@@ -27,55 +32,161 @@ pub struct OnlineNewsResidual {
 }
 
 #[derive(Default, Clone)]
-pub struct OnlineUpdateResidual {
-    pub cache: CacheState,
-    pub time: DateTime<Local>,
-}
-
-#[derive(Default, Clone)]
-#[cfg_attr(feature = "mock-api", allow(dead_code))]
+// #[cfg_attr(feature = "mock-api", allow(dead_code))]
 pub struct CacheState {
-    pacman_cache: PacmanUpdatesCache,
-    aur_cache: AurUpdatesCache,
-    devel_cache: DevelUpdatesCache,
+    pacman_cache: Option<PacmanUpdatesCache>,
+    aur_cache: Option<AurUpdatesCache>,
+    devel_cache: Option<DevelUpdatesCache>,
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct Updates {
-    pub pacman: Vec<PacmanUpdate>,
-    pub aur: Vec<AurUpdate>,
-    pub devel: Vec<DevelUpdate>,
+#[derive(Clone, Debug)]
+pub struct OnlineUpdates {
+    pub pacman: Result<Vec<PacmanUpdate>, String>,
+    pub aur: Result<Vec<AurUpdate>, String>,
+    pub devel: Result<Vec<DevelUpdate>, String>,
 }
 
-impl Updates {
-    /// Returns the total number of updates exluding the passed UpdateTypes.
-    pub fn total_filtered(&self, exclude_from_count: &HashSet<UpdateType>) -> usize {
-        let total_updates = |u: UpdateType| match u {
-            UpdateType::Aur => self.aur.len(),
-            UpdateType::Devel => self.devel.len(),
-            UpdateType::Pacman => self.pacman.len(),
-        };
-        HashSet::from([UpdateType::Aur, UpdateType::Devel, UpdateType::Pacman])
-            .difference(exclude_from_count)
-            .fold(0, |acc, e| acc + total_updates(*e))
+#[derive(Clone, Debug)]
+// If offline cache didn't exist, it's not an error.
+pub struct OfflineUpdates {
+    pub pacman: Option<Result<Vec<PacmanUpdate>, String>>,
+    pub aur: Option<Result<Vec<AurUpdate>, String>>,
+    pub devel: Option<Result<Vec<DevelUpdate>, String>>,
+}
+
+/// Shortcut for Vec<T,E> where previous state can be remembered as variant
+/// `ErrorWithHistory`
+#[derive(Clone, Debug)]
+pub enum BasicResultWithHistory<T> {
+    Ok { value: T },
+    Error,
+    ErrorWithHistory { last_value: T },
+}
+
+impl<T> BasicResultWithHistory<Vec<T>> {
+    /// Returns length of the vector if it's in OK state or has history,
+    /// otherwise 0.
+    pub fn len(&self) -> usize {
+        if let BasicResultWithHistory::Ok { value }
+        | BasicResultWithHistory::ErrorWithHistory {
+            last_value: value, ..
+        } = self
+        {
+            value.len()
+        } else {
+            0
+        }
+    }
+}
+
+impl<T> BasicResultWithHistory<T> {
+    pub fn has_error(&self) -> bool {
+        matches!(self, Self::Error { .. } | Self::ErrorWithHistory { .. })
+    }
+    /// In the conversion process from a result, error information is lost but
+    /// logged to console.
+    pub fn new_from_result<E: std::fmt::Display>(value: Result<T, E>) -> Self {
+        match value {
+            Ok(value) => BasicResultWithHistory::Ok { value },
+            Err(e) => {
+                eprintln!("{e}");
+                BasicResultWithHistory::Error
+            }
+        }
+    }
+    /// In the conversion process from a result, error information is lost but
+    /// logged to console.
+    pub fn replace_with_result_preserving_history<E: std::fmt::Display>(
+        self,
+        value: Result<T, E>,
+    ) -> Self {
+        match self {
+            BasicResultWithHistory::Ok { value: last_value } => match value {
+                Ok(value) => BasicResultWithHistory::Ok { value },
+                Err(e) => {
+                    eprintln!("{e}");
+                    BasicResultWithHistory::ErrorWithHistory { last_value }
+                }
+            },
+            BasicResultWithHistory::Error => match value {
+                Ok(value) => BasicResultWithHistory::Ok { value },
+                Err(e) => {
+                    eprintln!("{e}");
+                    BasicResultWithHistory::Error
+                }
+            },
+            BasicResultWithHistory::ErrorWithHistory { last_value, .. } => match value {
+                Ok(value) => BasicResultWithHistory::Ok { value },
+                Err(e) => {
+                    eprintln!("{e}");
+                    BasicResultWithHistory::ErrorWithHistory { last_value }
+                }
+            },
+        }
+    }
+    /// In the conversion process from a result, error information is lost but
+    /// logged to console.
+    pub fn replace_with_option_result_preserving_history<E: std::fmt::Display>(
+        self,
+        value: Option<Result<T, E>>,
+    ) -> Self {
+        let Some(value) = value else { return self };
+        match self {
+            BasicResultWithHistory::Ok { value: last_value } => match value {
+                Ok(value) => BasicResultWithHistory::Ok { value },
+                Err(e) => {
+                    eprintln!("{e}");
+                    BasicResultWithHistory::ErrorWithHistory { last_value }
+                }
+            },
+            BasicResultWithHistory::Error => match value {
+                Ok(value) => BasicResultWithHistory::Ok { value },
+                Err(e) => {
+                    eprintln!("{e}");
+                    BasicResultWithHistory::Error
+                }
+            },
+            BasicResultWithHistory::ErrorWithHistory { last_value, .. } => match value {
+                Ok(value) => BasicResultWithHistory::Ok { value },
+                Err(e) => {
+                    eprintln!("{e}");
+                    BasicResultWithHistory::ErrorWithHistory { last_value }
+                }
+            },
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum TimeoutError<E> {
+    Timeout,
+    Other(E),
+}
+
+impl<E: std::fmt::Display> std::fmt::Display for TimeoutError<E> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TimeoutError::Timeout => write!(f, "Timeout occurred"),
+            TimeoutError::Other(e) => write!(f, "{e}"),
+        }
     }
 }
 
 /// Helper function - adds a timeout to a future that returns a result.
-/// Type erases the error by converting to string, avoiding nested results.
-pub async fn flat_erased_timeout<T, E, Fut>(
+pub async fn flat_timeout<T, E, Fut>(
     duration: std::time::Duration,
     f: Fut,
-) -> Result<T, String>
+) -> Result<T, TimeoutError<E>>
 where
     Fut: Future<Output = Result<T, E>>,
     E: std::fmt::Display,
 {
-    let res = tokio::time::timeout(duration, f.map_err(|e| format!("{e}")))
-        .map_err(|_| "API call timed out".to_string())
+    let res = tokio::time::timeout(duration, f)
+        .map_err(|_| TimeoutError::Timeout)
         .await;
     match res {
-        Ok(Err(e)) | Err(e) => Err(e),
+        Ok(Err(e)) => Err(TimeoutError::Other(e)),
+        Err(e) => Err(e),
         Ok(Ok(t)) => Ok(t),
     }
 }
@@ -93,47 +204,53 @@ pub fn consume_warning<T, W: std::fmt::Display, E>(w: WarnedResult<T, W, E>) -> 
     }
 }
 
-#[cfg(feature = "mock-api")]
-pub async fn get_news_offline(
-    _: &NewsCache,
-) -> WarnedResult<Vec<DatedNewsItem>, String, anyhow::Error> {
-    super::mock::get_mock_news().await
-}
-
-#[cfg(not(feature = "mock-api"))]
+#[cfg_attr(feature = "mock-api", allow(unused_variables, unreachable_code))]
 pub async fn get_news_offline(
     cache: &NewsCache,
 ) -> WarnedResult<Vec<DatedNewsItem>, String, anyhow::Error> {
+    #[cfg(feature = "mock-api")]
+    return super::mock::get_mock_news().await;
+
     crate::news::get_news_offline(cache).await
 }
 
+#[cfg_attr(feature = "mock-api", allow(unreachable_code))]
 pub async fn get_news_online(
 ) -> WarnedResult<(Vec<DatedNewsItem>, NewsCache), String, anyhow::Error> {
+    #[cfg(feature = "mock-api")]
+    return super::mock::get_mock_news()
+        .await
+        .map(|r| (r, NewsCache::default()));
+
     crate::news::get_news_online().await
 }
 
-#[cfg(feature = "mock-api")]
-pub async fn get_updates_offline(_: &CacheState) -> arch_updates_rs::Result<Updates> {
-    super::mock::get_mock_updates().await
-}
+#[cfg_attr(feature = "mock-api", allow(unused_variables, unreachable_code))]
+pub async fn get_updates_offline(cache: &CacheState) -> OfflineUpdates {
+    #[cfg(feature = "mock-api")]
+    return super::mock::get_mock_updates().await;
 
-#[cfg(not(feature = "mock-api"))]
-pub async fn get_updates_offline(cache: &CacheState) -> arch_updates_rs::Result<Updates> {
     let CacheState {
         aur_cache,
         devel_cache,
         pacman_cache,
     } = cache;
+    async fn async_map<T, U>(t: &Option<T>, f: impl AsyncFn(&T) -> U) -> Option<U> {
+        match t {
+            Some(t) => Some(f(t).await),
+            None => None,
+        }
+    }
     let (pacman, aur, devel) = join!(
-        arch_updates_rs::check_pacman_updates_offline(pacman_cache),
-        arch_updates_rs::check_aur_updates_offline(aur_cache),
-        arch_updates_rs::check_devel_updates_offline(devel_cache),
+        async_map(pacman_cache, arch_updates_rs::check_pacman_updates_offline),
+        async_map(aur_cache, arch_updates_rs::check_aur_updates_offline),
+        async_map(devel_cache, arch_updates_rs::check_devel_updates_offline),
     );
-    Ok(Updates {
-        pacman: pacman?,
-        aur: aur?,
-        devel: devel?,
-    })
+    // String conversion of errors required as arch_updates_rs::Error is not Clone.
+    let pacman = pacman.map(|r| r.map_err(|e| format!("ERROR - pacman updates: {e}")));
+    let aur = aur.map(|r| r.map_err(|e| format!("ERROR - AUR updates: {e}")));
+    let devel = devel.map(|r| r.map_err(|e| format!("ERROR - devel updates: {e}")));
+    OfflineUpdates { pacman, aur, devel }
 }
 
 /// [[arch_updates_rs::check_pacman_updates_online]] can't run concurrently, so
@@ -160,25 +277,52 @@ pub async fn check_pacman_updates_online_exclusive(
     Ok(check_pacman_updates_online().await?)
 }
 
-pub async fn get_updates_online() -> anyhow::Result<(Updates, CacheState)> {
+#[cfg_attr(feature = "mock-api", allow(unused_variables, unreachable_code))]
+pub async fn get_updates_online(timeout: std::time::Duration) -> (OnlineUpdates, CacheState) {
+    #[cfg(feature = "mock-api")]
+    return (
+        OnlineUpdates {
+            pacman: Ok(Default::default()),
+            aur: Ok(Default::default()),
+            devel: Ok(Default::default()),
+        },
+        CacheState {
+            pacman_cache: None,
+            aur_cache: None,
+            devel_cache: None,
+        },
+    );
+
     let (pacman, aur, devel) = join!(
         // arch_updates_rs::check_pacman_updates_online doesn't handle multiple concurrent
         // processes.
-        check_pacman_updates_online_exclusive(),
-        arch_updates_rs::check_aur_updates_online(),
-        arch_updates_rs::check_devel_updates_online(),
+        flat_timeout(timeout, check_pacman_updates_online_exclusive()),
+        flat_timeout(timeout, arch_updates_rs::check_aur_updates_online()),
+        flat_timeout(timeout, arch_updates_rs::check_devel_updates_online()),
     );
-    let (pacman, pacman_cache) = pacman?;
-    let (aur, aur_cache) = aur?;
-    let (devel, devel_cache) = devel?;
-    Ok((
-        Updates { pacman, aur, devel },
+    fn extract_cache_and_update<U, C, E>(update: Result<(U, C), E>) -> (Option<C>, Result<U, E>) {
+        match update {
+            Ok((update, cache)) => (Some(cache), Ok(update)),
+            Err(e) => (None, Err(e)),
+        }
+    }
+    let (pacman_cache, pacman_updates) = extract_cache_and_update(pacman);
+    let (aur_cache, aur_updates) = extract_cache_and_update(aur);
+    let (devel_cache, devel_updates) = extract_cache_and_update(devel);
+    // String conversion of errors required as arch_updates_rs::Error is not Clone.
+    let updates = OnlineUpdates {
+        pacman: pacman_updates.map_err(|e| format!("ERROR - pacman updates: {e}")),
+        aur: aur_updates.map_err(|e| format!("ERROR - AUR updates: {e}")),
+        devel: devel_updates.map_err(|e| format!("ERROR - devel updates: {e}")),
+    };
+    (
+        updates,
         CacheState {
+            pacman_cache,
             aur_cache,
             devel_cache,
-            pacman_cache,
         },
-    ))
+    )
 }
 
 #[cfg(test)]

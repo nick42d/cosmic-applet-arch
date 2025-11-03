@@ -32,3 +32,5 @@ You can run the following commands to build and install:
 just build-release
 sudo just install
 ```
+
+Logging is currently to stderr, so can be viewed by initiating the applet in a terminal.

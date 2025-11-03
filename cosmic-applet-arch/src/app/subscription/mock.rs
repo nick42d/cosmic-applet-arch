@@ -1,4 +1,4 @@
-use super::core::Updates;
+use crate::app::subscription::core::OfflineUpdates;
 use crate::news::{DatedNewsItem, WarnedResult};
 use arch_updates_rs::{AurUpdate, DevelUpdate, PacmanUpdate, SourceRepo};
 use chrono::FixedOffset;
@@ -72,13 +72,13 @@ impl From<MockDatedNewsItem> for DatedNewsItem {
         }
     }
 }
-impl From<MockUpdates> for Updates {
-    fn from(value: MockUpdates) -> Updates {
+impl From<MockUpdates> for OfflineUpdates {
+    fn from(value: MockUpdates) -> OfflineUpdates {
         let MockUpdates { pacman, aur, devel } = value;
-        Updates {
-            pacman: pacman.into_iter().map(Into::into).collect(),
-            aur: aur.into_iter().map(Into::into).collect(),
-            devel: devel.into_iter().map(Into::into).collect(),
+        OfflineUpdates {
+            pacman: Some(Ok(pacman.into_iter().map(Into::into).collect())),
+            aur: Some(Ok(aur.into_iter().map(Into::into).collect())),
+            devel: Some(Ok(devel.into_iter().map(Into::into).collect())),
         }
     }
 }
@@ -151,12 +151,12 @@ impl From<MockSourceRepo> for SourceRepo {
         }
     }
 }
-pub async fn get_mock_updates() -> arch_updates_rs::Result<Updates> {
+pub async fn get_mock_updates() -> OfflineUpdates {
     let file = tokio::fs::read_to_string("test/mock_updates.ron")
         .await
         .unwrap();
     let updates: MockUpdates = ron::from_str(&file).unwrap();
-    Ok(updates.into())
+    updates.into()
 }
 pub async fn get_mock_news() -> WarnedResult<Vec<DatedNewsItem>, String, anyhow::Error> {
     let file = tokio::fs::read_to_string("test/mock_news.ron")
@@ -173,7 +173,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_mock_updates_is_valid() {
-        get_mock_updates().await.unwrap();
+        get_mock_updates().await;
     }
     #[tokio::test]
     async fn test_mock_news_is_valid() {
