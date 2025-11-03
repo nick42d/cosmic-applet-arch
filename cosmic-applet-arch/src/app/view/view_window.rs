@@ -1,4 +1,4 @@
-use crate::app::subscription::core::ErrorVecWithHistory;
+use crate::app::subscription::core::BasicResultWithHistory;
 use crate::app::view::{
     cosmic_applet_divider, cosmic_body_text_row, news_available_widget, updates_available_widget,
     AppIcon, Collapsed, DisplayPackage, MAX_NEWS_LINES, MAX_UPDATE_LINES,
@@ -9,6 +9,7 @@ use arch_updates_rs::{AurUpdate, DevelUpdate, PacmanUpdate};
 use chrono::{DateTime, Local};
 use cosmic::{theme, Element};
 
+/// All required data to render the news-related parts of applet popup
 enum NewsView<'a> {
     Empty,
     ErrorOnly,
@@ -22,7 +23,7 @@ enum NewsView<'a> {
 fn get_news_view(app: &CosmicAppletArch) -> NewsView<'_> {
     match &app.news {
         NewsState::Init => NewsView::Empty,
-        NewsState::InitError { .. } => NewsView::Empty,
+        NewsState::InitError { .. } => NewsView::ErrorOnly,
         NewsState::Received { value: news, .. } => NewsView::News {
             icon: None,
             news,
@@ -52,41 +53,20 @@ fn get_news_view(app: &CosmicAppletArch) -> NewsView<'_> {
     }
 }
 
-enum UpdateView<'a, T> {
-    ErrorOnly,
-    Updates {
-        updates: &'a Vec<T>,
-        has_error: bool,
-    },
-}
-
-fn get_update_view<T, E>(updates: &ErrorVecWithHistory<T, E>) -> UpdateView<'_, T> {
-    match updates {
-        ErrorVecWithHistory::Error { .. } => UpdateView::ErrorOnly,
-        ErrorVecWithHistory::Ok { value } => UpdateView::Updates {
-            updates: value,
-            has_error: false,
-        },
-        ErrorVecWithHistory::ErrorWithHistory { last_value, .. } => UpdateView::Updates {
-            updates: last_value,
-            has_error: true,
-        },
-    }
-}
-
+/// All required data to render the updates-related parts of applet popup
 enum UpdatesView<'a> {
     Loading,
     Loaded {
-        pacman_updates: UpdateView<'a, PacmanUpdate>,
-        aur_updates: UpdateView<'a, AurUpdate>,
-        devel_updates: UpdateView<'a, DevelUpdate>,
+        pacman_updates: SourceUpdatesView<'a, PacmanUpdate>,
+        aur_updates: SourceUpdatesView<'a, AurUpdate>,
+        devel_updates: SourceUpdatesView<'a, DevelUpdate>,
         last_refreshed: chrono::DateTime<Local>,
         refreshing: bool,
         no_updates_available: bool,
     },
 }
 
-pub fn get_updates_view(app: &CosmicAppletArch) -> UpdatesView<'_> {
+fn get_updates_view(app: &CosmicAppletArch) -> UpdatesView<'_> {
     let UpdatesState::Running {
         last_checked_online,
         ref pacman,
@@ -104,12 +84,38 @@ pub fn get_updates_view(app: &CosmicAppletArch) -> UpdatesView<'_> {
         && devel.len() == 0
         && !devel.has_error();
     UpdatesView::Loaded {
-        pacman_updates: get_update_view(&pacman),
-        aur_updates: get_update_view(&aur),
-        devel_updates: get_update_view(&devel),
+        pacman_updates: get_source_updates_view(pacman),
+        aur_updates: get_source_updates_view(aur),
+        devel_updates: get_source_updates_view(devel),
         last_refreshed: last_checked_online,
         refreshing,
         no_updates_available,
+    }
+}
+
+/// All required data to render the source-specifc updates-related parts of
+/// applet popup
+enum SourceUpdatesView<'a, T> {
+    ErrorOnly,
+    Updates {
+        updates: &'a Vec<T>,
+        has_error: bool,
+    },
+}
+
+fn get_source_updates_view<T>(
+    updates: &BasicResultWithHistory<Vec<T>>,
+) -> SourceUpdatesView<'_, T> {
+    match updates {
+        BasicResultWithHistory::Error => SourceUpdatesView::ErrorOnly,
+        BasicResultWithHistory::Ok { value } => SourceUpdatesView::Updates {
+            updates: value,
+            has_error: false,
+        },
+        BasicResultWithHistory::ErrorWithHistory { last_value, .. } => SourceUpdatesView::Updates {
+            updates: last_value,
+            has_error: true,
+        },
     }
 }
 
@@ -186,22 +192,22 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
 
     fn get_row_for_source<'a, T>(
         source_name: &'static str,
-        updates: &UpdateView<'a, T>,
+        updates: &SourceUpdatesView<'a, T>,
         converter: impl Fn(&T) -> DisplayPackage + 'a,
         collapsed: Collapsed,
         collapsible_type: crate::app::CollapsibleType,
     ) -> Option<Element<'a, Message>> {
         let row = match updates {
-            UpdateView::Updates {
+            SourceUpdatesView::Updates {
                 updates,
                 has_error: false,
             } if updates.is_empty() => {
                 return None;
             }
-            UpdateView::ErrorOnly => {
+            SourceUpdatesView::ErrorOnly => {
                 cosmic_body_text_row(fl!("error-checking-updates", updateSource = source_name))
             }
-            UpdateView::Updates {
+            SourceUpdatesView::Updates {
                 updates,
                 has_error: false,
             } => updates_available_widget(
@@ -215,7 +221,7 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
                 Message::ToggleCollapsible(collapsible_type),
                 MAX_UPDATE_LINES,
             ),
-            UpdateView::Updates {
+            SourceUpdatesView::Updates {
                 updates,
                 has_error: true,
             } => updates_available_widget(

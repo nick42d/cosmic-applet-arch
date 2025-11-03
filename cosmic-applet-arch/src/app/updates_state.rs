@@ -1,6 +1,4 @@
-use crate::app::subscription::core::{
-    ErrorVecWithHistory, OfflineUpdates, OnlineUpdates, UpdatesError,
-};
+use crate::app::subscription::core::{BasicResultWithHistory, OfflineUpdates, OnlineUpdates};
 use crate::app::Message;
 use crate::core::config::UpdateType;
 use arch_updates_rs::{AurUpdate, DevelUpdate, PacmanUpdate};
@@ -14,9 +12,9 @@ pub enum UpdatesState {
     Init,
     Running {
         last_checked_online: chrono::DateTime<Local>,
-        pacman: ErrorVecWithHistory<PacmanUpdate, UpdatesError>,
-        aur: ErrorVecWithHistory<AurUpdate, UpdatesError>,
-        devel: ErrorVecWithHistory<DevelUpdate, UpdatesError>,
+        pacman: BasicResultWithHistory<Vec<PacmanUpdate>>,
+        aur: BasicResultWithHistory<Vec<AurUpdate>>,
+        devel: BasicResultWithHistory<Vec<DevelUpdate>>,
         refreshing: bool,
     },
 }
@@ -49,20 +47,14 @@ impl UpdatesState {
             return false;
         };
         let has_error = |u: &UpdateType| match u {
-            UpdateType::Aur => !matches!(aur, ErrorVecWithHistory::Ok { .. }),
-            UpdateType::Devel => !matches!(devel, ErrorVecWithHistory::Ok { .. }),
-            UpdateType::Pacman => !matches!(pacman, ErrorVecWithHistory::Ok { .. }),
+            UpdateType::Aur => !matches!(aur, BasicResultWithHistory::Ok { .. }),
+            UpdateType::Devel => !matches!(devel, BasicResultWithHistory::Ok { .. }),
+            UpdateType::Pacman => !matches!(pacman, BasicResultWithHistory::Ok { .. }),
         };
         HashSet::from([UpdateType::Aur, UpdateType::Devel, UpdateType::Pacman])
             .difference(exclude)
             .into_iter()
             .any(has_error)
-    }
-    pub fn get_refreshing(&self) -> bool {
-        match self {
-            UpdatesState::Init => true,
-            UpdatesState::Running { refreshing, .. } => *refreshing,
-        }
     }
     pub fn set_refreshing(&mut self) {
         let prev_state = std::mem::take(self);
@@ -107,9 +99,9 @@ impl UpdatesState {
         *self = match prev_state {
             UpdatesState::Init => UpdatesState::Running {
                 last_checked_online: update_time,
-                pacman: ErrorVecWithHistory::new_from_result(pacman),
-                aur: ErrorVecWithHistory::new_from_result(aur),
-                devel: ErrorVecWithHistory::new_from_result(devel),
+                pacman: BasicResultWithHistory::new_from_result(pacman),
+                aur: BasicResultWithHistory::new_from_result(aur),
+                devel: BasicResultWithHistory::new_from_result(devel),
                 refreshing: false,
             },
             UpdatesState::Running {

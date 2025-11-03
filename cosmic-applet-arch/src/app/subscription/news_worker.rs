@@ -27,7 +27,6 @@ pub async fn raw_news_worker(
     let online_check_period = config.online_check_period;
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
-        let notified = clear_news_pressed_notifier.notified();
         tokio::select! {
             _ = interval.tick() => {
                 let check_type = match counter {
@@ -66,8 +65,8 @@ pub async fn raw_news_worker(
                     (CheckType::Offline, None) => continue,
                 };
             }
-            // User has manually triggered refresh.
-            _ = notified => {
+            // User has manually triggered clear.
+            _ = clear_news_pressed_notifier.notified() => {
                 counter = 1;
                 // Don't allow user to clear news if we haven't checked online yet (shouldn't be literally possible...)
                 if let Some(residual) = residual {

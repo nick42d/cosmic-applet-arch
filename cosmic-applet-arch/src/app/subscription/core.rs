@@ -32,12 +32,6 @@ pub struct OnlineNewsResidual {
 }
 
 #[derive(Default, Clone)]
-pub struct OnlineUpdateResidual {
-    pub cache: CacheState,
-    pub time: DateTime<Local>,
-}
-
-#[derive(Default, Clone)]
 // #[cfg_attr(feature = "mock-api", allow(dead_code))]
 pub struct CacheState {
     pacman_cache: Option<PacmanUpdatesCache>,
@@ -45,39 +39,36 @@ pub struct CacheState {
     devel_cache: Option<DevelUpdatesCache>,
 }
 
-#[derive(Debug, Clone)]
-pub struct UpdatesError;
-
 #[derive(Clone, Debug)]
 pub struct OnlineUpdates {
-    pub pacman: Result<Vec<PacmanUpdate>, UpdatesError>,
-    pub aur: Result<Vec<AurUpdate>, UpdatesError>,
-    pub devel: Result<Vec<DevelUpdate>, UpdatesError>,
+    pub pacman: Result<Vec<PacmanUpdate>, String>,
+    pub aur: Result<Vec<AurUpdate>, String>,
+    pub devel: Result<Vec<DevelUpdate>, String>,
 }
 
 #[derive(Clone, Debug)]
 // If offline cache didn't exist, it's not an error.
 pub struct OfflineUpdates {
-    pub pacman: Option<Result<Vec<PacmanUpdate>, UpdatesError>>,
-    pub aur: Option<Result<Vec<AurUpdate>, UpdatesError>>,
-    pub devel: Option<Result<Vec<DevelUpdate>, UpdatesError>>,
+    pub pacman: Option<Result<Vec<PacmanUpdate>, String>>,
+    pub aur: Option<Result<Vec<AurUpdate>, String>>,
+    pub devel: Option<Result<Vec<DevelUpdate>, String>>,
 }
 
 /// Shortcut for Vec<T,E> where previous state can be remembered as variant
 /// `ErrorWithHistory`
 #[derive(Clone, Debug)]
-pub enum ErrorVecWithHistory<T, E> {
-    Ok { value: Vec<T> },
-    Error { error: E },
-    ErrorWithHistory { last_value: Vec<T>, error: E },
+pub enum BasicResultWithHistory<T> {
+    Ok { value: T },
+    Error,
+    ErrorWithHistory { last_value: T },
 }
 
-impl<T, E> ErrorVecWithHistory<T, E> {
+impl<T> BasicResultWithHistory<Vec<T>> {
     /// Returns length of the vector if it's in OK state or has history,
     /// otherwise 0.
     pub fn len(&self) -> usize {
-        if let ErrorVecWithHistory::Ok { value }
-        | ErrorVecWithHistory::ErrorWithHistory {
+        if let BasicResultWithHistory::Ok { value }
+        | BasicResultWithHistory::ErrorWithHistory {
             last_value: value, ..
         } = self
         {
@@ -86,56 +77,83 @@ impl<T, E> ErrorVecWithHistory<T, E> {
             0
         }
     }
+}
+
+impl<T> BasicResultWithHistory<T> {
     pub fn has_error(&self) -> bool {
         matches!(self, Self::Error { .. } | Self::ErrorWithHistory { .. })
     }
-    pub fn new_from_result(value: Result<Vec<T>, E>) -> Self {
+    /// In the conversion process from a result, error information is lost but
+    /// logged to console.
+    pub fn new_from_result<E: std::fmt::Display>(value: Result<T, E>) -> Self {
         match value {
-            Ok(value) => ErrorVecWithHistory::Ok { value },
-            Err(error) => ErrorVecWithHistory::Error { error },
+            Ok(value) => BasicResultWithHistory::Ok { value },
+            Err(e) => {
+                eprintln!("{e}");
+                BasicResultWithHistory::Error
+            }
         }
     }
-    pub fn replace_with_result_preserving_history(self, value: Result<Vec<T>, E>) -> Self {
-        match self {
-            ErrorVecWithHistory::Ok { value: last_value } => match value {
-                Ok(value) => ErrorVecWithHistory::Ok { value },
-                Err(error) => ErrorVecWithHistory::ErrorWithHistory { last_value, error },
-            },
-            ErrorVecWithHistory::Error { .. } => match value {
-                Ok(value) => ErrorVecWithHistory::Ok { value },
-                Err(error) => ErrorVecWithHistory::Error { error },
-            },
-            ErrorVecWithHistory::ErrorWithHistory { last_value, .. } => match value {
-                Ok(value) => ErrorVecWithHistory::Ok { value },
-                Err(error) => ErrorVecWithHistory::ErrorWithHistory { last_value, error },
-            },
-        }
-    }
-    pub fn replace_with_option_result_preserving_history(
+    /// In the conversion process from a result, error information is lost but
+    /// logged to console.
+    pub fn replace_with_result_preserving_history<E: std::fmt::Display>(
         self,
-        value: Option<Result<Vec<T>, E>>,
+        value: Result<T, E>,
+    ) -> Self {
+        match self {
+            BasicResultWithHistory::Ok { value: last_value } => match value {
+                Ok(value) => BasicResultWithHistory::Ok { value },
+                Err(e) => {
+                    eprintln!("{e}");
+                    BasicResultWithHistory::ErrorWithHistory { last_value }
+                }
+            },
+            BasicResultWithHistory::Error => match value {
+                Ok(value) => BasicResultWithHistory::Ok { value },
+                Err(e) => {
+                    eprintln!("{e}");
+                    BasicResultWithHistory::Error
+                }
+            },
+            BasicResultWithHistory::ErrorWithHistory { last_value, .. } => match value {
+                Ok(value) => BasicResultWithHistory::Ok { value },
+                Err(e) => {
+                    eprintln!("{e}");
+                    BasicResultWithHistory::ErrorWithHistory { last_value }
+                }
+            },
+        }
+    }
+    /// In the conversion process from a result, error information is lost but
+    /// logged to console.
+    pub fn replace_with_option_result_preserving_history<E: std::fmt::Display>(
+        self,
+        value: Option<Result<T, E>>,
     ) -> Self {
         let Some(value) = value else { return self };
         match self {
-            ErrorVecWithHistory::Ok { value: last_value } => match value {
-                Ok(value) => ErrorVecWithHistory::Ok { value },
-                Err(error) => ErrorVecWithHistory::ErrorWithHistory { last_value, error },
+            BasicResultWithHistory::Ok { value: last_value } => match value {
+                Ok(value) => BasicResultWithHistory::Ok { value },
+                Err(e) => {
+                    eprintln!("{e}");
+                    BasicResultWithHistory::ErrorWithHistory { last_value }
+                }
             },
-            ErrorVecWithHistory::Error { .. } => match value {
-                Ok(value) => ErrorVecWithHistory::Ok { value },
-                Err(error) => ErrorVecWithHistory::Error { error },
+            BasicResultWithHistory::Error => match value {
+                Ok(value) => BasicResultWithHistory::Ok { value },
+                Err(e) => {
+                    eprintln!("{e}");
+                    BasicResultWithHistory::Error
+                }
             },
-            ErrorVecWithHistory::ErrorWithHistory { last_value, .. } => match value {
-                Ok(value) => ErrorVecWithHistory::Ok { value },
-                Err(error) => ErrorVecWithHistory::ErrorWithHistory { last_value, error },
+            BasicResultWithHistory::ErrorWithHistory { last_value, .. } => match value {
+                Ok(value) => BasicResultWithHistory::Ok { value },
+                Err(e) => {
+                    eprintln!("{e}");
+                    BasicResultWithHistory::ErrorWithHistory { last_value }
+                }
             },
         }
-    }
-}
-
-impl<T, E> Default for ErrorVecWithHistory<T, E> {
-    fn default() -> Self {
-        Self::Ok { value: vec![] }
     }
 }
 
@@ -219,7 +237,7 @@ pub async fn get_updates_offline(cache: &CacheState) -> OfflineUpdates {
     } = cache;
     async fn async_map<T, U>(t: &Option<T>, f: impl AsyncFn(&T) -> U) -> Option<U> {
         match t {
-            Some(t) => Some(f(&t).await),
+            Some(t) => Some(f(t).await),
             None => None,
         }
     }
@@ -228,9 +246,10 @@ pub async fn get_updates_offline(cache: &CacheState) -> OfflineUpdates {
         async_map(aur_cache, arch_updates_rs::check_aur_updates_offline),
         async_map(devel_cache, arch_updates_rs::check_devel_updates_offline),
     );
-    let pacman = pacman.map(|r| r.map_err(|_| UpdatesError));
-    let aur = aur.map(|r| r.map_err(|_| UpdatesError));
-    let devel = devel.map(|r| r.map_err(|_| UpdatesError));
+    // String conversion of errors required as arch_updates_rs::Error is not Clone.
+    let pacman = pacman.map(|r| r.map_err(|e| format!("ERROR - pacman updates: {e}")));
+    let aur = aur.map(|r| r.map_err(|e| format!("ERROR - AUR updates: {e}")));
+    let devel = devel.map(|r| r.map_err(|e| format!("ERROR - devel updates: {e}")));
     OfflineUpdates { pacman, aur, devel }
 }
 
@@ -291,10 +310,11 @@ pub async fn get_updates_online(timeout: std::time::Duration) -> (OnlineUpdates,
     let (pacman_cache, pacman_updates) = extract_cache_and_update(pacman);
     let (aur_cache, aur_updates) = extract_cache_and_update(aur);
     let (devel_cache, devel_updates) = extract_cache_and_update(devel);
+    // String conversion of errors required as arch_updates_rs::Error is not Clone.
     let updates = OnlineUpdates {
-        pacman: pacman_updates.map_err(|_| UpdatesError),
-        aur: aur_updates.map_err(|_| UpdatesError),
-        devel: devel_updates.map_err(|_| UpdatesError),
+        pacman: pacman_updates.map_err(|e| format!("ERROR - pacman updates: {e}")),
+        aur: aur_updates.map_err(|e| format!("ERROR - AUR updates: {e}")),
+        devel: devel_updates.map_err(|e| format!("ERROR - devel updates: {e}")),
     };
     (
         updates,
