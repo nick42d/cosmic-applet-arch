@@ -237,7 +237,7 @@ pub async fn check_devel_updates_online() -> Result<(Vec<DevelUpdate>, DevelUpda
                     .source()
                     .arch(&arch)
                     .filter_map(|url| {
-                        let url = parse_url(&url)?;
+                        let url = parse_url(url)?;
                         let PackageUrl { remote, branch, .. } = url;
                         // This allocation isn't ideal, but it's here to work around lifetime issues
                         // with nested streams that I've been unable to resolve. Spent a few hours

@@ -1,3 +1,5 @@
+use crate::app::subscription::core::{OfflineUpdates, OnlineUpdates};
+use crate::app::updates_state::UpdatesState;
 use crate::core::config::Config;
 use crate::news::{self, DatedNewsItem};
 use chrono::{DateTime, Local};
@@ -7,13 +9,13 @@ use cosmic::iced::window::Id;
 use cosmic::iced::Limits;
 use cosmic::{Application, Element};
 use std::sync::Arc;
-use subscription::core::Updates;
 use view::Collapsed;
 
 // See module docs.
 #[cfg(all(unix, not(target_os = "solaris")))]
 mod async_file_lock;
 mod subscription;
+mod updates_state;
 mod view;
 
 const SUBSCRIPTION_BUF_SIZE: usize = 10;
@@ -29,37 +31,16 @@ pub struct CosmicAppletArch {
     devel_list_state: Collapsed,
     refresh_pressed_notifier: Arc<tokio::sync::Notify>,
     clear_news_pressed_notifier: Arc<tokio::sync::Notify>,
-    updates_refreshing: bool,
     news: NewsState,
     updates: UpdatesState,
     config: Arc<Config>,
 }
 
 #[derive(Default, Debug)]
-pub enum UpdatesState {
-    #[default]
-    Init,
-    InitError {
-        error: String,
-    },
-    Received {
-        last_checked_online: chrono::DateTime<Local>,
-        value: Updates,
-    },
-    Error {
-        last_checked_online: chrono::DateTime<Local>,
-        last_value: Updates,
-        error: String,
-    },
-}
-
-#[derive(Default, Debug)]
 pub enum NewsState {
     #[default]
     Init,
-    InitError {
-        error: String,
-    },
+    InitError,
     Received {
         last_checked_online: chrono::DateTime<Local>,
         value: Vec<news::DatedNewsItem>,
@@ -75,7 +56,6 @@ pub enum NewsState {
     Error {
         last_checked_online: chrono::DateTime<Local>,
         last_value: Vec<news::DatedNewsItem>,
-        error: String,
     },
 }
 
@@ -85,9 +65,12 @@ pub enum Message {
     TogglePopup,
     ToggleCollapsible(CollapsibleType),
     PopupClosed(Id),
-    CheckUpdatesMsg {
-        updates: Updates,
-        checked_online_time: DateTime<Local>,
+    RefreshedUpdatesOnline {
+        updates: OnlineUpdates,
+        update_time: chrono::DateTime<Local>,
+    },
+    RefreshedUpdatesOffline {
+        updates: OfflineUpdates,
     },
     CheckNewsMsg {
         news: Vec<news::DatedNewsItem>,
@@ -96,9 +79,6 @@ pub enum Message {
     CheckNewsErrorsMsg(String),
     ClearNewsMsg,
     ClearNewsErrorMsg,
-    CheckUpdatesErrorsMsg {
-        error_string: String,
-    },
     OpenUrl(String),
 }
 
@@ -144,11 +124,11 @@ impl Application for CosmicAppletArch {
         Some(Message::PopupClosed(id))
     }
     // view is what is displayed in the toolbar when run as an applet.
-    fn view(&self) -> Element<Self::Message> {
+    fn view(&self) -> Element<'_, Self::Message> {
         view::view(self)
     }
     // view_window is what is displayed in the popup.
-    fn view_window(&self, id: Id) -> Element<Self::Message> {
+    fn view_window(&self, id: Id) -> Element<'_, Self::Message> {
         view::view_window::view_window(self, id)
     }
     // NOTE: Tasks may be returned for asynchronous execution on a
@@ -157,15 +137,15 @@ impl Application for CosmicAppletArch {
         match message {
             Message::TogglePopup => self.handle_toggle_popup(),
             Message::PopupClosed(id) => self.handle_popup_closed(id),
-            Message::CheckUpdatesMsg {
+            Message::RefreshedUpdatesOnline {
                 updates,
-                checked_online_time,
-            } => self.handle_updates(updates, checked_online_time),
+                update_time,
+            } => self.updates.handle_online_updates(updates, update_time),
+            Message::RefreshedUpdatesOffline { updates } => {
+                self.updates.handle_offline_updates(updates)
+            }
             Message::ForceGetUpdates => self.handle_force_get_updates(),
             Message::ToggleCollapsible(update_type) => self.handle_toggle_collapsible(update_type),
-            Message::CheckUpdatesErrorsMsg { error_string } => {
-                self.handle_update_error(error_string)
-            }
             Message::OpenUrl(url) => self.handle_open_url(url),
             Message::CheckNewsMsg {
                 news,
@@ -197,16 +177,16 @@ impl CosmicAppletArch {
     }
     fn handle_check_news_errors_msg(&mut self, e: String) -> Task<Message> {
         let old_news = std::mem::take(&mut self.news);
+        eprintln!("{e}");
         self.news = match old_news {
-            NewsState::Init => NewsState::InitError { error: e },
-            NewsState::InitError { .. } => NewsState::InitError { error: e },
+            NewsState::Init => NewsState::InitError,
+            NewsState::InitError => NewsState::InitError,
             NewsState::Received {
                 last_checked_online,
                 value,
             } => NewsState::Error {
                 last_checked_online,
                 last_value: value,
-                error: e,
             },
             NewsState::Clearing {
                 last_value,
@@ -217,7 +197,6 @@ impl CosmicAppletArch {
                 last_checked_online,
             } => NewsState::Error {
                 last_value,
-                error: e,
                 last_checked_online,
             },
             NewsState::Error {
@@ -226,7 +205,6 @@ impl CosmicAppletArch {
                 ..
             } => NewsState::Error {
                 last_value,
-                error: e,
                 last_checked_online,
             },
         };
@@ -235,8 +213,8 @@ impl CosmicAppletArch {
     fn handle_clear_news_msg(&mut self) -> Task<Message> {
         let old_news = std::mem::take(&mut self.news);
         self.news = match old_news {
-            NewsState::Init | NewsState::InitError { .. } => {
-                eprintln!("Warning: Tried to clear news, but there wasn't any");
+            NewsState::Init | NewsState::InitError => {
+                eprintln!("WARNING: Tried to clear news, but there wasn't any");
                 old_news
             }
             NewsState::Received {
@@ -262,7 +240,6 @@ impl CosmicAppletArch {
             },
             NewsState::Error {
                 last_value,
-                error: _,
                 last_checked_online,
             } => NewsState::Clearing {
                 last_value,
@@ -340,57 +317,8 @@ impl CosmicAppletArch {
         Task::none()
     }
     fn handle_force_get_updates(&mut self) -> Task<Message> {
-        self.updates_refreshing = true;
+        self.updates.set_refreshing();
         self.refresh_pressed_notifier.notify_one();
         Task::none()
-    }
-    fn handle_update_error(&mut self, error: String) -> Task<Message> {
-        self.updates_refreshing = false;
-        let old = std::mem::take(&mut self.updates);
-        self.updates = match old {
-            UpdatesState::Init | UpdatesState::InitError { .. } => {
-                UpdatesState::InitError { error }
-            }
-            UpdatesState::Received {
-                last_checked_online,
-                value,
-            } => UpdatesState::Error {
-                last_checked_online,
-                last_value: value,
-                error,
-            },
-            UpdatesState::Error {
-                last_checked_online,
-                last_value,
-                ..
-            } => UpdatesState::Error {
-                last_checked_online,
-                last_value,
-                error,
-            },
-        };
-        Task::none()
-    }
-    fn handle_updates(&mut self, updates: Updates, time: DateTime<Local>) -> Task<Message> {
-        self.updates_refreshing = false;
-        // When first receiving updates, autosize will not trigger until the second
-        // message is received. So, we intentionally bounce this message if it's
-        // the first time updates have been received.
-        let task = if matches!(self.updates, UpdatesState::Init) {
-            Task::done(
-                Message::CheckUpdatesMsg {
-                    updates: updates.clone(),
-                    checked_online_time: time,
-                }
-                .into(),
-            )
-        } else {
-            Task::none()
-        };
-        self.updates = UpdatesState::Received {
-            last_checked_online: time,
-            value: updates,
-        };
-        task
     }
 }
