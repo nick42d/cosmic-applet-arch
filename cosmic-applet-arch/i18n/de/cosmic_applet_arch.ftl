@@ -12,7 +12,7 @@ error-checking-updates = Fehlerprüfung von { $updateSource }-Updates
 
 news = Neuigkeiten seit dem letzten Update – Zum Löschen klicken
 no-news = Keine Neuigkeiten seit dem letzten Update.
-error-checking-news = Fehler bei der Neuigkeiten
+error-checking-news = Fehler beim Abrufen der Neuigkeiten
 
 loading = Wird geladen...
 last-checked = Zuletzt geprüft: { $dateTime } – Zum Aktualisieren klicken
