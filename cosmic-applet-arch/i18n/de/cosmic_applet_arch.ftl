@@ -8,7 +8,7 @@ updates-available-with-error = { $numberUpdates ->
    *[other] { $numberUpdates }+ { $updateSource }-Updates verfügbar (Fehler beim letzten Aktualisieren)
 }
 no-updates-available = Keine Updates verfügbar.
-error-checking-updates = Fehlerprüfung von { $updateSource }-Updates
+error-checking-updates = Fehler beim Prüfen von { $updateSource }-Updates
 
 news = Neuigkeiten seit dem letzten Update – Zum Löschen klicken
 no-news = Keine Neuigkeiten seit dem letzten Update.
