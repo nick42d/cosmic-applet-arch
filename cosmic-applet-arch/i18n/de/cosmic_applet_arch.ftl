@@ -4,8 +4,8 @@ updates-available = { $numberUpdates ->
    *[other] { $numberUpdates } { $updateSource }-Updates verfügbar
 }
 updates-available-with-error = { $numberUpdates ->
-    [one] 1+ { $updateSource }-Update(s) verfügbar (fehler beim letzten Aktualisieren)
-   *[other] { $numberUpdates }+ { $updateSource }-Updates verfügbar (fehler beim letzten Aktualisieren)
+    [one] 1+ { $updateSource }-Update(s) verfügbar (Fehler beim letzten Aktualisieren)
+   *[other] { $numberUpdates }+ { $updateSource }-Updates verfügbar (Fehler beim letzten Aktualisieren)
 }
 no-updates-available = Keine Updates verfügbar.
 error-checking-updates = Fehlerprüfung von { $updateSource }-Updates
