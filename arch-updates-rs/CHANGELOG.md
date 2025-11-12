@@ -12,14 +12,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Clippy lints ([#46](https://github.com/nick42d/cosmic-applet-arch/pull/46))
 
-## [0.3.1](https://github.com/nick42d/cosmic-applet-arch/compare/arch-updates-rs/v0.3.0...arch-updates-rs/v0.3.1) - 2025-11-11
-
-### Added
-- Seperate AUR errors from pacman errors ([#46](https://github.com/nick42d/cosmic-applet-arch/pull/46))
-
-
-
-
 ## [0.3.0](https://github.com/nick42d/cosmic-applet-arch/compare/arch-updates-rs/v0.2.2...arch-updates-rs/v0.3.0) - 2025-10-26
 
 ### Fixed
