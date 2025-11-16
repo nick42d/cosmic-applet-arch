@@ -5,7 +5,7 @@ use crate::fl;
 use crate::news::DatedNewsItem;
 use arch_updates_rs::{AurUpdate, DevelUpdate, PacmanUpdate, SourceRepo};
 use cosmic::iced::alignment::{Horizontal, Vertical};
-use cosmic::iced::Length;
+use cosmic::iced::{Length, Padding};
 use cosmic::widget::{JustifyContent, Widget};
 use cosmic::{theme, Element};
 use std::collections::HashMap;
@@ -135,8 +135,14 @@ fn cosmic_overflowing_list_widget<'a>(
             None
         }
     };
+    let cosmic::cosmic_theme::Spacing {
+        space_xxxs,
+        space_m,
+        ..
+    } = theme::active().cosmic().spacing;
     let cosmic_padding = cosmic::applet::menu_control_padding();
-    let footer_padding = cosmic_padding.left(cosmic_padding.left + left_margin_px as f32);
+    let footer_padding =
+        Padding::from([space_xxxs, space_m]).left(cosmic_padding.left + left_margin_px as f32);
     let footer = overflow_line.map(|footer| {
         cosmic::widget::container(cosmic::widget::text::body(footer))
             .padding(footer_padding)
@@ -149,7 +155,11 @@ fn display_package_widget(
     package: DisplayPackage,
     left_margin_px: u16,
 ) -> Element<'static, Message> {
-    let cosmic_padding = cosmic::applet::menu_control_padding();
+    let cosmic::cosmic_theme::Spacing {
+        space_xxxs,
+        space_m,
+        ..
+    } = theme::active().cosmic().spacing;
     cosmic::widget::flex_row(vec![
         cosmic::widget::container(cosmic_url_widget_body(
             package.pretty_print_pkgname_and_repo(),
@@ -160,7 +170,7 @@ fn display_package_widget(
         cosmic::widget::text::body(package.pretty_print_version_change()).into(),
     ])
     .justify_content(JustifyContent::SpaceBetween)
-    .padding(cosmic_padding)
+    .padding([space_xxxs, space_m])
     .into()
 }
 
