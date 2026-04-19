@@ -17,3 +17,13 @@ error-checking-news = Error checking news
 loading = Loading...
 last-checked = Last checked: { $dateTime } - Click to refresh
 n-more = ...and { $n } more.
+
+update-now = Update Now
+settings = Settings
+hide-settings = Hide Settings
+
+settings-title = Settings
+terminal-label = Terminal:
+terminal-placeholder = Terminal (e.g., wezterm)
+aur-helper-label = AUR Helper:
+save = Save

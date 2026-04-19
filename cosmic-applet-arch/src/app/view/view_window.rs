@@ -4,9 +4,11 @@ use crate::app::view::{
     AppIcon, Collapsed, DisplayPackage, MAX_NEWS_LINES, MAX_UPDATE_LINES,
 };
 use crate::app::{CollapsibleType, Message, NewsState, UpdatesState};
+use crate::core::config::AurHelper;
 use crate::{fl, CosmicAppletArch};
 use arch_updates_rs::{AurUpdate, DevelUpdate, PacmanUpdate};
 use chrono::{DateTime, Local};
+use cosmic::iced::Length;
 use cosmic::{theme, Element};
 
 /// All required data to render the news-related parts of applet popup
@@ -301,6 +303,58 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
         None
     };
 
+    let update_button = cosmic::applet::menu_button(cosmic::widget::text::body(fl!("update-now")))
+        .on_press(Message::OpenTerminal);
+
+    let settings_icon = if app.settings_expanded {
+        cosmic::widget::icon::from_name("go-down-symbolic").size(16)
+    } else {
+        cosmic::widget::icon::from_name("emblem-system-symbolic").size(16)
+    };
+    let settings_button =
+        cosmic::applet::menu_button(settings_icon).on_press(Message::OpenSettings);
+
+    let buttons_row = cosmic::widget::row()
+        .spacing(space_s)
+        .width(Length::Fill)
+        .push(update_button)
+        .push(settings_button);
+
+    let settings_panel: Option<Element<'_, Message>> = if app.settings_expanded {
+        let terminal_label = cosmic::widget::text::body(fl!("terminal-label"));
+        let terminal_input = cosmic::widget::text_input::TextInput::new(
+            fl!("terminal-placeholder"),
+            &app.config.terminal,
+        )
+        .on_input(Message::SetTerminal)
+        .width(Length::Fill);
+
+        let aur_helper_btn_text = match app.config.aur_helper {
+            AurHelper::Yay => "yay",
+            AurHelper::Paru => "paru",
+        };
+        let aur_helper_toggle =
+            cosmic::widget::button::custom(cosmic::widget::text::body(fl!("aur-helper-label")))
+                .on_press(Message::ToggleAurHelper);
+
+        Some(
+            cosmic::widget::column()
+                .spacing(space_s)
+                .padding([space_xxs, space_s])
+                .push(terminal_label)
+                .push(terminal_input)
+                .push(
+                    cosmic::widget::row()
+                        .spacing(space_xxs)
+                        .push(aur_helper_toggle)
+                        .push(cosmic::widget::text::body(aur_helper_btn_text)),
+                )
+                .into(),
+        )
+    } else {
+        None
+    };
+
     let content_list = content_list
         .push_maybe(pacman_row)
         .push_maybe(pacman_row_divider)
@@ -313,7 +367,10 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
         .push_maybe(loading_row)
         .push(cosmic_applet_divider(space_s).into())
         .push_maybe(news_row)
-        .push_maybe(news_error_row);
+        .push_maybe(news_error_row)
+        .push(cosmic_applet_divider(space_s).into())
+        .push(buttons_row)
+        .push_maybe(settings_panel);
     app.core
         .applet
         .popup_container(content_list)

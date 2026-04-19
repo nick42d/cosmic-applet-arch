@@ -17,3 +17,13 @@ error-checking-news = Erro checando novidades
 loading = Carregando...
 last-checked = Checado pela última vez: { $dateTime } - Clique para recarregar
 n-more = ...e { $n } mais.
+
+update-now = Atualizar Agora
+settings = Configurações
+hide-settings = Ocultar Configurações
+
+settings-title = Configurações
+terminal-label = Terminal:
+terminal-placeholder = Terminal (ex: wezterm)
+aur-helper-label = Helper AUR:
+save = Salvar

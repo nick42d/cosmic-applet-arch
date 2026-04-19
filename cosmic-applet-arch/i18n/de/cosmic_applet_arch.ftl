@@ -17,3 +17,13 @@ error-checking-news = Fehler beim Abrufen der Neuigkeiten
 loading = Wird geladen...
 last-checked = Zuletzt geprüft: { $dateTime } – Zum Aktualisieren klicken
 n-more = …und { $n } weitere.
+
+update-now = Jetzt aktualisieren
+settings = Einstellungen
+hide-settings = Einstellungen ausblenden
+
+settings-title = Einstellungen
+terminal-label = Terminal:
+terminal-placeholder = Terminal (z.B. wezterm)
+aur-helper-label = AUR-Helfer:
+save = Speichern

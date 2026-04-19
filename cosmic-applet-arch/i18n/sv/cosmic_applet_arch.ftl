@@ -17,3 +17,13 @@ error-checking-news = Fel vid kontroll av nyheter
 loading = Laddar...
 last-checked = Senast kontrollerat: { $dateTime } - klicka för att uppdatera
 n-more = ...och { $n } mer.
+
+update-now = Uppdatera nu
+settings = Inställningar
+hide-settings = Dölj inställningar
+
+settings-title = Inställningar
+terminal-label = Terminal:
+terminal-placeholder = Terminal (t.ex. wezterm)
+aur-helper-label = AUR-hjälpare:
+save = Spara
