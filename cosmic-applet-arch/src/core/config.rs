@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 
 const CONFIG_FILE_NAME: &str = "config.toml";
 
-#[derive(Deserialize, Serialize, Debug, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 #[serde(rename_all = "snake_case", deny_unknown_fields, default)]
 pub struct Config {
     /// UpdateTypes to exclude from the updates count shown on the taskbar.
@@ -23,6 +23,10 @@ pub struct Config {
     pub online_check_period: usize,
     /// If you are using unofficial repositories, a package url can be provided.
     pub other_repo_urls: HashMap<String, String>,
+    /// Terminal emulator to use for running the update command.
+    pub terminal: String,
+    /// AUR helper to use for updating packages.
+    pub aur_helper: AurHelper,
 }
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Hash, Clone, Copy)]
@@ -33,6 +37,28 @@ pub enum UpdateType {
     Pacman,
 }
 
+#[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Hash, Clone, Copy)]
+#[serde(rename_all = "snake_case", tag = "type")]
+pub enum AurHelper {
+    Yay,
+    Paru,
+}
+
+impl Default for AurHelper {
+    fn default() -> Self {
+        Self::Paru
+    }
+}
+
+impl std::fmt::Display for AurHelper {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AurHelper::Yay => write!(f, "yay"),
+            AurHelper::Paru => write!(f, "paru"),
+        }
+    }
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -41,6 +67,8 @@ impl Default for Config {
             timeout_secs: 120,
             online_check_period: 600,
             other_repo_urls: Default::default(),
+            terminal: "wezterm".to_string(),
+            aur_helper: AurHelper::default(),
         }
     }
 }

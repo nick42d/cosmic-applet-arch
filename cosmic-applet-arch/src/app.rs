@@ -1,6 +1,7 @@
 use crate::app::subscription::core::{OfflineUpdates, OnlineUpdates};
 use crate::app::updates_state::UpdatesState;
-use crate::core::config::Config;
+use crate::core::config::{AurHelper, Config};
+use crate::core::proj_dirs;
 use crate::news::{self, DatedNewsItem};
 use chrono::{DateTime, Local};
 use cosmic::app::{Core, Task};
@@ -8,7 +9,9 @@ use cosmic::iced::platform_specific::shell::wayland::commands::popup::{destroy_p
 use cosmic::iced::window::Id;
 use cosmic::iced::Limits;
 use cosmic::{Application, Element};
+use directories::ProjectDirs;
 use std::sync::Arc;
+use toml;
 use view::Collapsed;
 
 // See module docs.
@@ -34,6 +37,7 @@ pub struct CosmicAppletArch {
     news: NewsState,
     updates: UpdatesState,
     config: Arc<Config>,
+    settings_expanded: bool,
 }
 
 #[derive(Default, Debug)]
@@ -80,6 +84,10 @@ pub enum Message {
     ClearNewsMsg,
     ClearNewsErrorMsg,
     OpenUrl(String),
+    OpenTerminal,
+    OpenSettings,
+    SetTerminal(String),
+    ToggleAurHelper,
 }
 
 #[derive(Clone, Debug)]
@@ -154,6 +162,30 @@ impl Application for CosmicAppletArch {
             Message::CheckNewsErrorsMsg(e) => self.handle_check_news_errors_msg(e),
             Message::ClearNewsMsg => self.handle_clear_news_msg(),
             Message::ClearNewsErrorMsg => self.handle_clear_news_error_msg(),
+            Message::OpenTerminal => self.handle_open_terminal(),
+            Message::OpenSettings => self.handle_toggle_settings(),
+            Message::SetTerminal(terminal) => {
+                let new_config = Config {
+                    terminal,
+                    ..(*self.config).clone()
+                };
+                self.config = Arc::new(new_config);
+                self.save_config();
+                Task::none()
+            }
+            Message::ToggleAurHelper => {
+                let new_aur_helper = match self.config.aur_helper {
+                    crate::core::config::AurHelper::Yay => crate::core::config::AurHelper::Paru,
+                    crate::core::config::AurHelper::Paru => crate::core::config::AurHelper::Yay,
+                };
+                let new_config = Config {
+                    aur_helper: new_aur_helper,
+                    ..(*self.config).clone()
+                };
+                self.config = Arc::new(new_config);
+                self.save_config();
+                Task::none()
+            }
         }
     }
     // Long running stream of messages to the app.
@@ -275,6 +307,38 @@ impl CosmicAppletArch {
             eprintln!("Error {e} opening url {url}")
         }
         Task::none()
+    }
+    fn handle_open_terminal(&self) -> Task<Message> {
+        let terminal = &self.config.terminal;
+        let aur_helper = self.config.aur_helper.to_string();
+        let command = format!("{} -e {} -Syu", terminal, aur_helper);
+        if let Err(e) = std::process::Command::new("sh")
+            .arg("-c")
+            .arg(&command)
+            .spawn()
+        {
+            eprintln!("Error {e} opening terminal with command: {command}");
+        }
+        Task::none()
+    }
+    fn handle_toggle_settings(&mut self) -> Task<Message> {
+        self.settings_expanded = !self.settings_expanded;
+        Task::none()
+    }
+    fn save_config(&self) {
+        if let Some(dirs) = proj_dirs() {
+            let config = Config {
+                exclude_from_counter: self.config.exclude_from_counter.clone(),
+                interval_secs: self.config.interval_secs,
+                timeout_secs: self.config.timeout_secs,
+                online_check_period: self.config.online_check_period,
+                other_repo_urls: self.config.other_repo_urls.clone(),
+                terminal: self.config.terminal.clone(),
+                aur_helper: self.config.aur_helper,
+            };
+            let toml_str = toml::to_string(&config).unwrap();
+            let _ = std::fs::write(dirs.config_dir().join("config.toml"), toml_str);
+        }
     }
     fn handle_toggle_popup(&mut self) -> Task<Message> {
         if let Some(p) = self.popup.take() {
