@@ -17,3 +17,4 @@ error-checking-news = Error checking news
 loading = Loading...
 last-checked = Last checked: { $dateTime } - Click to refresh
 n-more = ...and { $n } more.
+update = Update System

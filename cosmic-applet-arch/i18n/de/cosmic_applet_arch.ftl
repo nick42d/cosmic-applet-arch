@@ -17,3 +17,4 @@ error-checking-news = Fehler beim Abrufen der Neuigkeiten
 loading = Wird geladen...
 last-checked = Zuletzt geprüft: { $dateTime } – Zum Aktualisieren klicken
 n-more = …und { $n } weitere.
+update = System aktualisieren

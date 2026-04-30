@@ -23,6 +23,12 @@ pub struct Config {
     pub online_check_period: usize,
     /// If you are using unofficial repositories, a package url can be provided.
     pub other_repo_urls: HashMap<String, String>,
+    /// Terminal to use when running the update command.
+    /// Common options: "kitty", "ghostty", "alacritty", "xterm".
+    pub terminal: String,
+    /// AUR helper to use for updating packages.
+    /// Common options: "yay", "paru".
+    pub aur_helper: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, Eq, PartialEq, Hash, Clone, Copy)]
@@ -41,6 +47,8 @@ impl Default for Config {
             timeout_secs: 120,
             online_check_period: 600,
             other_repo_urls: Default::default(),
+            terminal: "kitty".to_string(),
+            aur_helper: "yay".to_string(),
         }
     }
 }

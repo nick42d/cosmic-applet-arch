@@ -26,3 +26,11 @@ timeout_secs = 120
 # 
 # other_repo_urls.endeavouros = "https://github.com/endeavouros-team/PKGBUILDS/tree/master/{pkgname}"
 # other_repo_urls.chaotic-aur = "https://gitlab.com/chaotic-aur/pkgbuilds/-/tree/main/{pkgname}"
+
+# Terminal to use when running the update command.
+# Common options: "kitty", "ghostty", "alacritty", "xterm".
+terminal = "kitty"
+
+# AUR helper to use for updating packages.
+# Common options: "yay", "paru".
+aur_helper = "yay"

@@ -33,6 +33,23 @@ pub fn cosmic_applet_divider(
         .padding([0, spacing])
 }
 
+pub fn update_button() -> Element<'static, Message> {
+    let cosmic::cosmic_theme::Spacing { space_s, .. } = theme::active().cosmic().spacing;
+    let cosmic_padding = cosmic::applet::menu_control_padding();
+    let container = cosmic::widget::container(
+        cosmic::widget::text::body(fl!("update"))
+            .width(Length::Fill)
+            .height(Length::Fixed(24.0))
+            .align_y(Vertical::Center),
+    )
+    .padding(cosmic_padding);
+    cosmic::widget::button::custom(container)
+        .width(Length::Fill)
+        .padding([0, space_s])
+        .on_press(Message::RunAurHelper)
+        .into()
+}
+
 pub fn cosmic_body_text_row(text: String) -> Element<'static, Message> {
     cosmic::widget::container(
         cosmic::widget::text::body(text)

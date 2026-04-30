@@ -1,7 +1,7 @@
 use crate::app::subscription::core::BasicResultWithHistory;
 use crate::app::view::{
-    cosmic_applet_divider, cosmic_body_text_row, news_available_widget, updates_available_widget,
-    AppIcon, Collapsed, DisplayPackage, MAX_NEWS_LINES, MAX_UPDATE_LINES,
+    cosmic_applet_divider, cosmic_body_text_row, news_available_widget, update_button,
+    updates_available_widget, AppIcon, Collapsed, DisplayPackage, MAX_NEWS_LINES, MAX_UPDATE_LINES,
 };
 use crate::app::{CollapsibleType, Message, NewsState, UpdatesState};
 use crate::{fl, CosmicAppletArch};
@@ -311,6 +311,8 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
         .push_maybe(no_updates_available_row)
         .push_maybe(last_checked_row)
         .push_maybe(loading_row)
+        .push(cosmic_applet_divider(space_s).into())
+        .push(update_button())
         .push(cosmic_applet_divider(space_s).into())
         .push_maybe(news_row)
         .push_maybe(news_error_row);

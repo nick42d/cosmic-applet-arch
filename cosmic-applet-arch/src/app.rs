@@ -80,6 +80,7 @@ pub enum Message {
     ClearNewsMsg,
     ClearNewsErrorMsg,
     OpenUrl(String),
+    RunAurHelper,
 }
 
 #[derive(Clone, Debug)]
@@ -154,6 +155,7 @@ impl Application for CosmicAppletArch {
             Message::CheckNewsErrorsMsg(e) => self.handle_check_news_errors_msg(e),
             Message::ClearNewsMsg => self.handle_clear_news_msg(),
             Message::ClearNewsErrorMsg => self.handle_clear_news_error_msg(),
+            Message::RunAurHelper => self.handle_run_aur_helper(),
         }
     }
     // Long running stream of messages to the app.
@@ -319,6 +321,19 @@ impl CosmicAppletArch {
     fn handle_force_get_updates(&mut self) -> Task<Message> {
         self.updates.set_refreshing();
         self.refresh_pressed_notifier.notify_one();
+        Task::none()
+    }
+    fn handle_run_aur_helper(&self) -> Task<Message> {
+        let terminal = self.config.terminal.clone();
+        let aur_helper = self.config.aur_helper.clone();
+        let command = format!("{} -e {} -Syu", terminal, aur_helper);
+        if let Err(e) = std::process::Command::new("sh")
+            .arg("-c")
+            .arg(&command)
+            .spawn()
+        {
+            eprintln!("Error {e} running command: {command}");
+        }
         Task::none()
     }
 }

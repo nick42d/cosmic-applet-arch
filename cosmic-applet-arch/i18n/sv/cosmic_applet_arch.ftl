@@ -17,3 +17,4 @@ error-checking-news = Fel vid kontroll av nyheter
 loading = Laddar...
 last-checked = Senast kontrollerat: { $dateTime } - klicka för att uppdatera
 n-more = ...och { $n } mer.
+update = Uppdatera systemet
