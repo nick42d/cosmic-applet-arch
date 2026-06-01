@@ -105,7 +105,7 @@ impl Application for CosmicAppletArch {
         &mut self.core
     }
     // Use default cosmic applet style
-    fn style(&self) -> Option<cosmic::iced_runtime::Appearance> {
+    fn style(&self) -> Option<cosmic::iced::theme::Style> {
         Some(cosmic::applet::style())
     }
     // Entry point for libcosmic init.

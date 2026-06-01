@@ -150,7 +150,7 @@ pub fn applet_button_with_text<'a, Message: 'static + Clone>(
     let text = core
         .applet
         .text(text)
-        .wrapping(cosmic::iced_core::text::Wrapping::Glyph);
+        .wrapping(cosmic::iced::core::text::Wrapping::Glyph);
     // Column or row layout depends on panel position.
     // TODO: handle text overflow when vertical.
     let container = if core.applet.is_horizontal() {

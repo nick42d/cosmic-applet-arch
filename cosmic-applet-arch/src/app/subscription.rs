@@ -20,10 +20,9 @@ pub fn subscription(app: &CosmicAppletArch) -> cosmic::iced::Subscription<Messag
     let config_arc = app.config.clone();
     let updates_worker =
         |tx| updates_worker::raw_updates_worker(tx, refresh_pressed_notifier, config_arc);
-    let updates_stream =
-        cosmic::iced_futures::stream::channel(SUBSCRIPTION_BUF_SIZE, updates_worker);
-    let news_stream = cosmic::iced_futures::stream::channel(SUBSCRIPTION_BUF_SIZE, news_worker);
-    let updates_sub = cosmic::iced::Subscription::run_with_id("arch-updates-sub", updates_stream);
-    let news_sub = cosmic::iced::Subscription::run_with_id("arch-news-sub", news_stream);
+    let updates_stream = cosmic::iced::stream::channel(SUBSCRIPTION_BUF_SIZE, updates_worker);
+    let news_stream = cosmic::iced::stream::channel(SUBSCRIPTION_BUF_SIZE, news_worker);
+    let updates_sub = cosmic::iced::Subscription::run(updates_stream);
+    let news_sub = cosmic::iced::Subscription::run(news_stream);
     cosmic::iced::Subscription::batch([updates_sub, news_sub])
 }

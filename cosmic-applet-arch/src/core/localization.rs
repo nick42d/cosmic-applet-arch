@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use i18n_embed::fluent::{fluent_language_loader, FluentLanguageLoader};
-use i18n_embed::{LanguageLoader, Localizer, DefaultLocalizer};
+use i18n_embed::{DefaultLocalizer, LanguageLoader, Localizer};
 use rust_embed::RustEmbed;
 use std::sync::LazyLock;
 
@@ -35,10 +35,12 @@ pub fn localize() {
 #[macro_export]
 macro_rules! fl {
     ($message_id:literal) => {{
-        i18n_embed_fl::fl!($crate::core::localization::LANGUAGE_LOADER, $message_id)
+        let loader = &$crate::core::localization::LANGUAGE_LOADER;
+        i18n_embed_fl::fl!(loader, $message_id)
     }};
 
     ($message_id:literal, $($args:expr),*) => {{
-        i18n_embed_fl::fl!($crate::core::localization::LANGUAGE_LOADER, $message_id, $($args), *)
+        let loader = &$crate::core::localization::LANGUAGE_LOADER;
+        i18n_embed_fl::fl!(loader, $message_id, $($args), *)
     }};
 }

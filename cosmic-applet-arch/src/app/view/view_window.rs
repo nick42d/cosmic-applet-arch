@@ -135,7 +135,7 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
         space_xxs, space_s, ..
     } = theme::active().cosmic().spacing;
 
-    let content_list = cosmic::widget::column()
+    let content_list = cosmic::widget::Column::new()
         .spacing(space_xxs)
         .padding([space_xxs, 0]);
 
@@ -173,7 +173,7 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
             let last_checked_text_widget =
                 cosmic::widget::text::body(last_checked_string(last_refreshed));
             let last_checked_widget = if refreshing {
-                let row = cosmic::widget::row()
+                let row = cosmic::widget::Row::new()
                     .spacing(space_xxs)
                     .push(cosmic::widget::icon(
                         cosmic::widget::icon::from_name("emblem-synchronizing-symbolic").handle(),
