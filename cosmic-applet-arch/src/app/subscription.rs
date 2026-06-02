@@ -1,4 +1,8 @@
 use super::{CosmicAppletArch, Message, SUBSCRIPTION_BUF_SIZE};
+use crate::core::config::Config;
+use futures::Stream;
+use std::sync::Arc;
+use tokio::sync::Notify;
 
 #[cfg(feature = "mock-api")]
 /// This module provides a way to feed mock data to the app when compiled with
@@ -25,4 +29,17 @@ pub fn subscription(app: &CosmicAppletArch) -> cosmic::iced::Subscription<Messag
     let updates_sub = cosmic::iced::Subscription::run(updates_stream);
     let news_sub = cosmic::iced::Subscription::run(news_stream);
     cosmic::iced::Subscription::batch([updates_sub, news_sub])
+}
+
+fn updates_stream_builder(data: &(Arc<Notify>, Arc<Config>)) -> impl Stream<Item = Message> {
+    let (refresh_pressed_notifier, config) = data.to_owned();
+    let updates_worker =
+        |tx| updates_worker::raw_updates_worker(tx, refresh_pressed_notifier, config);
+    cosmic::iced::stream::channel(SUBSCRIPTION_BUF_SIZE, updates_worker)
+}
+
+fn news_stream_builder(data: &(Arc<Notify>, Arc<Config>)) -> impl Stream<Item = Message> {
+    let (clear_news_pressed_notifier, config) = data.to_owned();
+    let news_worker = |tx| news_worker::raw_news_worker(tx, clear_news_pressed_notifier, config);
+    cosmic::iced::stream::channel(SUBSCRIPTION_BUF_SIZE, news_worker)
 }
