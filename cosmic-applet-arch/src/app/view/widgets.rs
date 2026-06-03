@@ -219,11 +219,10 @@ pub fn news_list_widget<'a>(
 fn cosmic_url_widget_body(text: String, url: Option<String>) -> Element<'static, Message> {
     match url {
         Some(url) => cosmic::widget::tooltip(
-            cosmic::iced::widget::mouse_area(cosmic::iced::widget::rich_text([
-                cosmic::iced::widget::span(text).underline(true),
-            ]))
-            .interaction(cosmic::iced::mouse::Interaction::Pointer)
-            .on_press(Message::OpenUrl(url.clone())),
+            cosmic::iced::widget::rich_text([cosmic::iced::widget::span(text)
+                .underline(true)
+                .link(url.clone())])
+            .on_link_click(Message::OpenUrl),
             cosmic::widget::text::body(url),
             cosmic::widget::tooltip::Position::FollowCursor,
         )
