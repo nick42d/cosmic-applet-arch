@@ -55,7 +55,7 @@ fn cosmic_collapsible_row_widget<'a>(
         Collapsed::Expanded => "go-up-symbolic",
     };
 
-    let heading = cosmic::applet::menu_button(cosmic::iced_widget::row![
+    let heading = cosmic::applet::menu_button(cosmic::iced::widget::row![
         cosmic::widget::text::body(title)
             .width(Length::Fill)
             .height(Length::Fixed(24.0))
@@ -73,7 +73,7 @@ fn cosmic_collapsible_row_widget<'a>(
     .on_press(on_press_mesage);
     match collapsed {
         Collapsed::Collapsed => heading.into(),
-        Collapsed::Expanded => cosmic::iced_widget::column![heading, contents].into(),
+        Collapsed::Expanded => cosmic::iced::widget::column![heading, contents].into(),
     }
 }
 
@@ -92,7 +92,7 @@ pub fn news_available_widget<'a>(
             let news_header_text = cosmic::widget::text::body(fl!("news"));
             let news_header = match icon {
                 Some(icon) => news_header(
-                    cosmic::iced_widget::row![
+                    cosmic::iced::widget::row![
                         cosmic::widget::icon::from_name(icon.to_str()),
                         news_header_text
                     ]
@@ -101,7 +101,7 @@ pub fn news_available_widget<'a>(
                 ),
                 None => news_header(news_header_text.into()),
             };
-            cosmic::iced_widget::column![
+            cosmic::iced::widget::column![
                 news_header,
                 news_list_widget(news_list, max_news_lines, space_xxs)
             ]
@@ -219,11 +219,10 @@ pub fn news_list_widget<'a>(
 fn cosmic_url_widget_body(text: String, url: Option<String>) -> Element<'static, Message> {
     match url {
         Some(url) => cosmic::widget::tooltip(
-            cosmic::iced::widget::mouse_area(cosmic::iced_widget::rich_text([
-                cosmic::iced_widget::span(text).underline(true),
-            ]))
-            .interaction(cosmic::iced::mouse::Interaction::Pointer)
-            .on_press(Message::OpenUrl(url.clone())),
+            cosmic::iced::widget::rich_text([cosmic::iced::widget::span(text)
+                .underline(true)
+                .link(url.clone())])
+            .on_link_click(Message::OpenUrl),
             cosmic::widget::text::body(url),
             cosmic::widget::tooltip::Position::FollowCursor,
         )
