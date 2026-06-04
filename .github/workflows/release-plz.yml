@@ -62,7 +62,7 @@ jobs:
         run: ./aur/generate-pkgbuild.bash $NEW_APPLET_VERSION
       - name: Publish AUR package
         if: ${{ steps.check_applet_release.outputs.applet_released == 'true' }}
-        uses: KSXGitHub/github-actions-deploy-aur@4.1.3
+        uses: KSXGitHub/github-actions-deploy-aur@v4.1.3
         with:
           pkgname: cosmic-applet-arch
           pkgbuild: ./PKGBUILD
@@ -100,7 +100,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Run release-plz
-        uses: MarcoIeni/release-plz-action@v0.5
+        uses: MarcoIeni/release-plz-action@v0.5.129
         with:
           command: release-pr
         env:
