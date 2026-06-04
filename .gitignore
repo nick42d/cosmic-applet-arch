@@ -12,3 +12,4 @@ target/
 aur/*
 !aur/PKGBUILD
 !aur/.SRCINFO
+!aur/generate_pkgbuild.sh
