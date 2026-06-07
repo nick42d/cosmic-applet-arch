@@ -6,7 +6,7 @@ semver_check = false
 # disable cargo publish for comsic-applet-arch binary.
 [[package]]
 name = "cosmic-applet-arch"
-release = false
+publish = false
 git_only = true
 
 # disable cargo publish for comsic-applet-arch binary.
