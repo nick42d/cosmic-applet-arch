@@ -36,7 +36,7 @@ makedepends=(
   just
   lld
 )
-source=(git+https://github.com/nick42d/cosmic-applet-arch.git#tag=\${pkgname}-v\${pkgver})
+source=(git+https://github.com/nick42d/cosmic-applet-arch.git#tag=\${pkgname}/v\${pkgver})
 b2sums=('tbc')
 
 prepare() {
