@@ -60,7 +60,7 @@ jobs:
         if: ${{ steps.check_applet_release.outputs.applet_released == 'true' }}
         env:
           NEW_APPLET_VERSION: ${{ steps.check_applet_release.outputs.applet_version }}
-        run: ./aur/generate-pkgbuild.bash $NEW_APPLET_VERSION
+        run: ./aur/generate-pkgbuild.sh $NEW_APPLET_VERSION
       - name: Publish AUR package
         if: ${{ steps.check_applet_release.outputs.applet_released == 'true' }}
         uses: KSXGitHub/github-actions-deploy-aur@v4.1.3
