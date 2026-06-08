@@ -24,11 +24,11 @@ jobs:
       uses: actions/checkout@v6
     
     - name: Build
-      run: cargo build --verbose
+      run: cargo build --verbose --locked
 
     - name: Run tests
       run: | 
-        cargo test --verbose --bins --lib
-        cargo test --verbose --doc
-        cargo test --verbose --all-features --bins --lib
-        cargo test --verbose --all-features --doc
+        cargo test --verbose --locked --bins --lib
+        cargo test --verbose --locked --doc
+        cargo test --verbose --locked --all-features --bins --lib
+        cargo test --verbose --locked --all-features --doc
