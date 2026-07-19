@@ -7,6 +7,7 @@ use cosmic::app::{Core, Task};
 use cosmic::iced::platform_specific::shell::wayland::commands::popup::{destroy_popup, get_popup};
 use cosmic::iced::window::Id;
 use cosmic::iced::Limits;
+use cosmic::surface::{self, surface_task};
 use cosmic::{Application, Element};
 use std::sync::Arc;
 use view::Collapsed;
@@ -80,6 +81,7 @@ pub enum Message {
     ClearNewsMsg,
     ClearNewsErrorMsg,
     OpenUrl(String),
+    Surface(surface::Action),
 }
 
 #[derive(Clone, Debug)]
@@ -154,6 +156,9 @@ impl Application for CosmicAppletArch {
             Message::CheckNewsErrorsMsg(e) => self.handle_check_news_errors_msg(e),
             Message::ClearNewsMsg => self.handle_clear_news_msg(),
             Message::ClearNewsErrorMsg => self.handle_clear_news_error_msg(),
+            Message::Surface(action) => {
+                cosmic::task::message(cosmic::Action::Cosmic(cosmic::app::Action::Surface(action)))
+            }
         }
     }
     // Long running stream of messages to the app.
@@ -283,23 +288,29 @@ impl CosmicAppletArch {
             self.pacman_list_state = Collapsed::Collapsed;
             self.aur_list_state = Collapsed::Collapsed;
             self.devel_list_state = Collapsed::Collapsed;
-            let new_id = Id::unique();
-            self.popup.replace(new_id);
-            let mut popup_settings = self.core.applet.get_popup_settings(
-                // Unwrap safety: this approach was used in the official cosmic applets
-                // https://github.com/pop-os/cosmic-applets/commit/5b5cd77e7c75d0f5a8eab96231adca4cb7a02786#diff-644c3fce2a26d21e536fd2da1a183f63a2549053f1441dfe931286a115807916R309
-                self.core.main_window_id().unwrap(),
-                new_id,
+            surface_task(surface::action::app_popup(
+                |_| Default::default(),
+                move |app: &mut Self| {
+                    let new_id = Id::unique();
+                    app.popup = Some(new_id);
+                    let mut popup_settings = app.core.applet.get_popup_settings(
+                        // Unwrap safety: this approach was used in the official cosmic applets
+                        // https://github.com/pop-os/cosmic-applets/commit/5b5cd77e7c75d0f5a8eab96231adca4cb7a02786#diff-644c3fce2a26d21e536fd2da1a183f63a2549053f1441dfe931286a115807916R309
+                        app.core.main_window_id().unwrap(),
+                        new_id,
+                        None,
+                        None,
+                        None,
+                    );
+                    popup_settings.positioner.size_limits = Limits::NONE
+                        .max_width(500.0)
+                        .min_width(300.0)
+                        .min_height(200.0)
+                        .max_height(1080.0);
+                    popup_settings
+                },
                 None,
-                None,
-                None,
-            );
-            popup_settings.positioner.size_limits = Limits::NONE
-                .max_width(500.0)
-                .min_width(300.0)
-                .min_height(200.0)
-                .max_height(1080.0);
-            get_popup(popup_settings)
+            ))
         }
     }
     fn handle_toggle_collapsible(&mut self, update_type: CollapsibleType) -> Task<Message> {
