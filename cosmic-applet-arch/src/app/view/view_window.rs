@@ -124,7 +124,12 @@ fn get_source_updates_view<T>(
 }
 
 // view_window is what is displayed in the popup.
-pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Element<'_, Message> {
+pub fn view_window(app: &CosmicAppletArch, id: cosmic::iced::window::Id) -> Element<'_, Message> {
+    // Ref: https://github.com/pop-os/cosmic-applets/blob/48c363315194b8901ada03b9e965893b6e13d477/cosmic-applet-power/src/lib.rs#L287
+    if app.popup.is_none_or(|app_id| app_id != id) {
+        return cosmic::widget::text("").into();
+    }
+
     fn last_checked_string(t: DateTime<Local>) -> String {
         fl!(
             "last-checked",
@@ -317,12 +322,12 @@ pub fn view_window(app: &CosmicAppletArch, _id: cosmic::iced::window::Id) -> Ele
     app.core
         .applet
         .popup_container(content_list)
-        .limits(
-            cosmic::iced::Limits::NONE
-                .min_height(200.)
-                .min_width(300.0)
-                .max_width(500.0)
-                .max_height(1080.0),
-        )
+        // .limits(
+        //     cosmic::iced::Limits::NONE
+        //         .min_height(200.)
+        //         .min_width(300.0)
+        //         .max_width(500.0)
+        //         .max_height(1080.0),
+        // )
         .into()
 }
