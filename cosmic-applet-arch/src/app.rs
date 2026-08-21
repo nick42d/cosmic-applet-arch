@@ -5,7 +5,6 @@ use crate::news::{self, DatedNewsItem};
 use chrono::{DateTime, Local};
 use cosmic::app::{Core, Task};
 use cosmic::iced::window::Id;
-use cosmic::iced::Limits;
 use cosmic::surface::{self, surface_task};
 use cosmic::{Application, Element};
 use std::sync::Arc;
