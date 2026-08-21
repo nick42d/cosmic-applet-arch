@@ -288,7 +288,7 @@ impl CosmicAppletArch {
                 move |app: &mut Self| {
                     let new_id = Id::unique();
                     app.popup = Some(new_id);
-                    let mut popup_settings = app.core.applet.get_popup_settings(
+                    app.core.applet.get_popup_settings(
                         // Unwrap safety: this approach was used in the official cosmic applets
                         // https://github.com/pop-os/cosmic-applets/commit/5b5cd77e7c75d0f5a8eab96231adca4cb7a02786#diff-644c3fce2a26d21e536fd2da1a183f63a2549053f1441dfe931286a115807916R309
                         app.core.main_window_id().unwrap(),
@@ -296,13 +296,7 @@ impl CosmicAppletArch {
                         None,
                         None,
                         None,
-                    );
-                    // popup_settings.positioner.size_limits = Limits::NONE
-                    //     .max_width(500.0)
-                    //     .min_width(300.0)
-                    //     .min_height(200.0)
-                    //     .max_height(1080.0);
-                    popup_settings
+                    )
                 },
                 None,
             ))
