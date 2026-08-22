@@ -2,7 +2,8 @@
 COSMIC Applet to display Arch Linux package status.
 Inspired by https://github.com/savely-krasovsky/waybar-updates and https://github.com/RaphaelRochet/arch-update.
 
-![scn](https://github.com/user-attachments/assets/69c49436-226f-4349-afae-94d34694d565)
+<img width="502" height="331" alt="image" src="https://github.com/user-attachments/assets/a0500bef-e45a-4d52-bf49-e1595059ed80" />
+
 
 # arch_updates_rs - Arch updates API
 Please refer to `arch-updates-rs/README.md` for more information.
