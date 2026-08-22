@@ -9,13 +9,13 @@ repository = "https://github.com/nick42d/cosmic-applet-arch"
 readme = "README.md"
 
 [dependencies]
-futures = "0.3.31"
-raur = "7.0.0"
-reqwest = "0.12.20"
-srcinfo = "2.0.0"
-thiserror = "2.0.12"
-tokio = { version = "1.45.1", features = ["process"] }
-version-compare = "0.2.0"
+futures = "0.3.34"
+raur = "8.0.0"
+reqwest = "0.13.4"
+srcinfo = "2.1.0"
+thiserror = "2.0.20"
+tokio = { version = "1.53.1", features = ["process"] }
+version-compare = "0.2.1"
 
 [dev-dependencies]
-tokio = { version = "1.45.1", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }

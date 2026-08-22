@@ -12,7 +12,7 @@ Please refer to `arch-updates-rs/README.md` for more information.
 - Once installed, the app can be added via the COSMIC Settings app -> Desktop -> Panel/Dock -> Configure panel/dock applets -> Add applet.
 
 ## Features
- - Native COSMIC look and feel, supporting both light and dark mode.
+ - Native COSMIC look and feel, supporting frosted glass and both light and dark mode.
  - pacman, AUR, and devel package upgrades shown.
  - Latest news from Arch news feed shown (all news after last full system upgrade).
  - Package upgrades and news feed are clickable taking you to associated web page.

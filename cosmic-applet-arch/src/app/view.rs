@@ -129,7 +129,7 @@ pub fn applet_icon(core: &Core, icon_type: AppIcon) -> cosmic::widget::Icon {
     cosmic::widget::icon(icon)
         .class(cosmic::theme::Svg::Custom(Rc::new(|theme| {
             cosmic::widget::svg::Style {
-                color: Some(theme.cosmic().background.on.into()),
+                color: Some(theme.cosmic().background(theme.transparent).on.into()),
             }
         })))
         .width(Length::Fixed(suggested.0 as f32))
