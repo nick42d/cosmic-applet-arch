@@ -322,12 +322,12 @@ pub fn view_window(app: &CosmicAppletArch, id: cosmic::iced::window::Id) -> Elem
     app.core
         .applet
         .popup_container(content_list)
+        .auto_height(true)
         .limits(
             cosmic::iced::Limits::NONE
-                .min_height(200.)
-                .min_width(300.0)
-                .max_width(500.0)
-                .max_height(1080.0),
+                .min_width(300.)
+                .max_width(500.)
+                .max_height(1000.),
         )
         .into()
 }

@@ -5,6 +5,7 @@ use crate::news::{self, DatedNewsItem};
 use chrono::{DateTime, Local};
 use cosmic::app::{Core, Task};
 use cosmic::iced::window::Id;
+use cosmic::surface::action::destroy_popup;
 use cosmic::surface::{self, surface_task};
 use cosmic::{Application, Element};
 use std::sync::Arc;
@@ -277,7 +278,7 @@ impl CosmicAppletArch {
     }
     fn handle_toggle_popup(&mut self) -> Task<Message> {
         if let Some(p) = self.popup.take() {
-            surface_task(surface::action::destroy_layer_shell(p))
+            surface_task(destroy_popup(p))
         } else {
             self.pacman_list_state = Collapsed::Collapsed;
             self.aur_list_state = Collapsed::Collapsed;
