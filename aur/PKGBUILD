@@ -20,6 +20,7 @@ makedepends=(
   git
   just
   lld
+  mold
 )
 source=(git+https://github.com/nick42d/cosmic-applet-arch.git#tag=${pkgname}/v${pkgver})
 b2sums=('1b7725ff574e4596efb5f24f61c9a63a1fb6cc6c0b328459f7f68efb18d9c3b25064b098173be5b9ed9bd900e664ab77879ba08323bd40bac3366cf66bd0651f')
