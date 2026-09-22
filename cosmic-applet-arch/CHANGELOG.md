@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+## [1.1.2](https://github.com/nick42d/cosmic-applet-arch/compare/cosmic-applet-arch/v1.1.1...cosmic-applet-arch/v1.1.2) - 2026-09-22
+
+### Other
+- updated the following local packages: arch-updates-rs
+
+
+
 ## [1.1.0]
 - Fix lockfile
 
