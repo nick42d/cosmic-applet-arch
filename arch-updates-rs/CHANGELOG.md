@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+
+## [0.3.2](https://github.com/nick42d/cosmic-applet-arch/compare/arch-updates-rs/v0.3.1...arch-updates-rs/v0.3.2) - 2026-09-22
+
+### Other
+- Update libcosmic [adds frosted glass support] ([#79](https://github.com/nick42d/cosmic-applet-arch/pull/79))
+
+
+
 ## [0.3.1](https://github.com/nick42d/cosmic-applet-arch/compare/arch-updates-rs/v0.3.0...arch-updates-rs/v0.3.1) - 2025-11-08
 
 ### Added
