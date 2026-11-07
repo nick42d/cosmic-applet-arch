@@ -11,11 +11,11 @@ readme = "README.md"
 [dependencies]
 futures = "0.3.34"
 raur = "8.0.0"
-reqwest = "0.13.4"
+reqwest = "0.13.5"
 srcinfo = "2.1.0"
-thiserror = "2.0.20"
-tokio = { version = "1.53.1", features = ["process"] }
+thiserror = "2.0.21"
+tokio = { version = "1.54.1", features = ["process"] }
 version-compare = "0.2.1"
 
 [dev-dependencies]
-tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.54.1", features = ["macros", "rt-multi-thread"] }
