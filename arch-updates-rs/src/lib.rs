@@ -419,6 +419,7 @@ pub async fn check_aur_updates_online(
 /// let offline = check_aur_updates_offline(&cache).await.unwrap();
 /// assert!(offline.is_empty());
 /// # };
+/// ```
 pub async fn check_aur_updates_offline(cache: &AurUpdatesCache) -> Result<Vec<AurUpdate>> {
     let old = get_aur_packages().await?;
     let updates = old
