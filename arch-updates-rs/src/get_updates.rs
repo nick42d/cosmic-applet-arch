@@ -161,7 +161,11 @@ pub async fn get_devel_packages() -> Result<Vec<Package>> {
 }
 
 /// Get and parse the .SRCINFO for an package, if its in the AUR.
-pub async fn get_aur_srcinfo(client: reqwest::Client, pkgname: &str) -> Result<Option<Srcinfo>> {
+pub async fn get_aur_srcinfo(user_agent: &str, pkgname: &str) -> Result<Option<Srcinfo>> {
+    let client = reqwest::Client::builder()
+        .user_agent(user_agent)
+        .build()
+        .unwrap();
     let aur = raur::Handle::new_with_client(client.clone());
     // First we need to get the base repository from the AUR API. Since the pkgname
     // may not be the same as the repository name (and repository can contain
@@ -297,17 +301,18 @@ mod tests {
     use super::*;
     use futures::future::try_join;
 
+    const TEST_USER_AGENT: &str = concat!(
+        env!("CARGO_PKG_NAME"),
+        "/",
+        env!("CARGO_PKG_VERSION"),
+        " (tests)"
+    );
+
     #[tokio::test]
     async fn test_get_srcinfo() {
-        let client = reqwest::Client::builder()
-            .user_agent(concat!(
-                env!("CARGO_PKG_NAME"),
-                "_tests/",
-                env!("CARGO_PKG_VERSION")
-            ))
-            .build()
+        get_aur_srcinfo(TEST_USER_AGENT, "hyprlang-git")
+            .await
             .unwrap();
-        get_aur_srcinfo(client, "hyprlang-git").await.unwrap();
     }
     #[tokio::test]
     async fn test_checkupdates_sync() {
@@ -328,28 +333,14 @@ mod tests {
     }
     #[tokio::test]
     async fn test_get_srcinfo_not_in_aur() {
-        let client = reqwest::Client::builder()
-            .user_agent(concat!(
-                env!("CARGO_PKG_NAME"),
-                "_tests/",
-                env!("CARGO_PKG_VERSION")
-            ))
-            .build()
+        let output = get_aur_srcinfo(TEST_USER_AGENT, "made-up-package")
+            .await
             .unwrap();
-        let output = get_aur_srcinfo(client, "made-up-package").await.unwrap();
         assert!(output.is_none());
     }
     #[tokio::test]
     async fn test_get_url() {
-        let client = reqwest::Client::builder()
-            .user_agent(concat!(
-                env!("CARGO_PKG_NAME"),
-                "_tests/",
-                env!("CARGO_PKG_VERSION")
-            ))
-            .build()
-            .unwrap();
-        let srcinfo = get_aur_srcinfo(client, "hyprlang-git")
+        let srcinfo = get_aur_srcinfo(TEST_USER_AGENT, "hyprlang-git")
             .await
             .unwrap()
             .unwrap();
@@ -358,15 +349,7 @@ mod tests {
     }
     #[tokio::test]
     async fn test_get_head() {
-        let client = reqwest::Client::builder()
-            .user_agent(concat!(
-                env!("CARGO_PKG_NAME"),
-                "_tests/",
-                env!("CARGO_PKG_VERSION")
-            ))
-            .build()
-            .unwrap();
-        let srcinfo = get_aur_srcinfo(client, "hyprutils-git")
+        let srcinfo = get_aur_srcinfo(TEST_USER_AGENT, "hyprutils-git")
             .await
             .unwrap()
             .unwrap();

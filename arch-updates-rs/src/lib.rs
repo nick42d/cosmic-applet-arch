@@ -234,19 +234,12 @@ pub async fn check_pacman_updates_offline(cache: &PacmanUpdatesCache) -> Result<
 pub async fn check_devel_updates_online(
     user_agent: &str,
 ) -> Result<(Vec<DevelUpdate>, DevelUpdatesCache)> {
-    let client = reqwest::Client::builder()
-        .user_agent(user_agent)
-        .build()
-        .unwrap();
     let arch = get_arch().await?;
     let devel_packages = get_devel_packages().await?;
     let devel_updates = futures::stream::iter(devel_packages)
-        // Ensure each iterator element has access to the Client (which is cheap to clone per
-        // reqwest docs).
-        .zip(futures::stream::repeat(client.clone()))
         // Get the SRCINFO for each package (as Result<Option<_>>).
-        .then(|(pkg, client)| async move {
-            let srcinfo = get_aur_srcinfo(client, &pkg.pkgname).await;
+        .then(|pkg| async move {
+            let srcinfo = get_aur_srcinfo(user_agent, &pkg.pkgname).await;
             (pkg, srcinfo)
         })
         // Remove any None values from the list - these are where the aurweb
