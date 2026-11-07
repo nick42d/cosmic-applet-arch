@@ -165,6 +165,8 @@ pub async fn get_aur_srcinfo(user_agent: &str, pkgname: &str) -> Result<Option<S
     let client = reqwest::Client::builder()
         .user_agent(user_agent)
         .build()
+        // It's standard practice to panic if a `reqwest::Client` fails to build (see
+        // `reqwest::Client::new`)
         .unwrap();
     let aur = raur::Handle::new_with_client(client.clone());
     // First we need to get the base repository from the AUR API. Since the pkgname

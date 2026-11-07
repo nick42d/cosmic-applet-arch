@@ -363,7 +363,8 @@ pub async fn check_aur_updates_online(
     let client = reqwest::Client::builder()
         .user_agent(user_agent)
         .build()
-        // Panicking on client build failure matches standard behaviour of raur::Handle::new()
+        // It's standard practice to panic if a `reqwest::Client` fails to build (see
+        // `reqwest::Client::new`)
         .unwrap();
     let aur = raur::Handle::new_with_client(client.clone());
     let cache: Vec<AurUpdate> = aur
