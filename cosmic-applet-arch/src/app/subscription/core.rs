@@ -293,12 +293,20 @@ pub async fn get_updates_online(timeout: std::time::Duration) -> (OnlineUpdates,
         },
     );
 
+    const USER_AGENT: &str = concat!(env!("CARGO_PKG_NAME"), "/", env!("CARGO_PKG_VERSION"));
+
     let (pacman, aur, devel) = join!(
         // arch_updates_rs::check_pacman_updates_online doesn't handle multiple concurrent
         // processes.
         flat_timeout(timeout, check_pacman_updates_online_exclusive()),
-        flat_timeout(timeout, arch_updates_rs::check_aur_updates_online()),
-        flat_timeout(timeout, arch_updates_rs::check_devel_updates_online()),
+        flat_timeout(
+            timeout,
+            arch_updates_rs::check_aur_updates_online(USER_AGENT)
+        ),
+        flat_timeout(
+            timeout,
+            arch_updates_rs::check_devel_updates_online(USER_AGENT)
+        ),
     );
     fn extract_cache_and_update<U, C, E>(update: Result<(U, C), E>) -> (Option<C>, Result<U, E>) {
         match update {

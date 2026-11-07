@@ -13,10 +13,11 @@
 //!
 //! #[tokio::main]
 //! pub async fn main() {
+//!     let user_agent = concat!(env!("CARGO_PKG_NAME"),"/",env!("CARGO_PKG_VERSION"));
 //!     let (Ok((pacman, pacman_cache)), Ok((aur, aur_cache)), Ok((devel, devel_cache))) = tokio::join!(
 //!         check_pacman_updates_online(),
-//!         check_aur_updates_online(),
-//!         check_devel_updates_online(),
+//!         check_aur_updates_online(user_agent),
+//!         check_devel_updates_online(user_agent),
 //!     ) else {
 //!         panic!();
 //!     };
@@ -162,6 +163,7 @@ pub struct DevelUpdatesCache(Vec<DevelUpdate>);
 /// let (updates, _) = check_pacman_updates_online().await.unwrap();
 /// assert!(updates.is_empty());
 /// # };
+/// ```
 pub async fn check_pacman_updates_online() -> Result<(Vec<PacmanUpdate>, PacmanUpdatesCache)> {
     let (parsed_updates, source_info) =
         try_join(checkupdates(CheckupdatesMode::Sync), get_sources_list()).await?;
@@ -188,6 +190,7 @@ pub async fn check_pacman_updates_online() -> Result<(Vec<PacmanUpdate>, PacmanU
 /// let offline = check_pacman_updates_offline(&cache).await.unwrap();
 /// assert!(offline.is_empty());
 /// # };
+/// ```
 pub async fn check_pacman_updates_offline(cache: &PacmanUpdatesCache) -> Result<Vec<PacmanUpdate>> {
     let parsed_updates = checkupdates(CheckupdatesMode::NoSync).await?;
     Ok(add_sources_to_updates(parsed_updates, &cache.0))
@@ -209,22 +212,41 @@ pub async fn check_pacman_updates_offline(cache: &PacmanUpdatesCache) -> Result<
 ///  - This is also reliant on VCS packages being good
 ///    citizens and following the VCS Packaging Guidelines.
 ///    <https://wiki.archlinux.org/title/VCS_package_guidelines>
+///  - Due to the AUR using [Anubis](https://anubis.techaro.lol/) for bot protection,
+///    a user agent is required or this function will error. See the [MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/User-Agent)
+///    for more information on User Agents. Cargo environment variables can be
+///    used to generate a user agent based on your Cargo.toml: `let user_agent =
+///    concat!(env!("CARGO_PKG_NAME"),"/",env!("CARGO_PKG_VERSION"))`
 /// # Usage
 /// ```no_run
 /// # use arch_updates_rs::*;
 /// # async {
-/// let (updates, _) = check_devel_updates_online().await.unwrap();
+/// let (updates, _) = check_devel_updates_online("app_name/app_ver")
+///     .await
+///     .unwrap();
 /// // Run `paru -Syu` in the terminal
-/// let (updates, _) = check_devel_updates_online().await.unwrap();
+/// let (updates, _) = check_devel_updates_online("app_name/app_ver")
+///     .await
+///     .unwrap();
 /// assert!(updates.is_empty());
 /// # };
-pub async fn check_devel_updates_online() -> Result<(Vec<DevelUpdate>, DevelUpdatesCache)> {
+/// ```
+pub async fn check_devel_updates_online(
+    user_agent: &str,
+) -> Result<(Vec<DevelUpdate>, DevelUpdatesCache)> {
+    let client = reqwest::Client::builder()
+        .user_agent(user_agent)
+        .build()
+        .unwrap();
     let arch = get_arch().await?;
     let devel_packages = get_devel_packages().await?;
-    let devel_updates = futures::stream::iter(devel_packages.into_iter())
+    let devel_updates = futures::stream::iter(devel_packages)
+        // Ensure each iterator element has access to the Client (which is cheap to clone per
+        // reqwest docs).
+        .zip(futures::stream::repeat(client.clone()))
         // Get the SRCINFO for each package (as Result<Option<_>>).
-        .then(|pkg| async move {
-            let srcinfo = get_aur_srcinfo(&pkg.pkgname).await;
+        .then(|(pkg, client)| async move {
+            let srcinfo = get_aur_srcinfo(client, &pkg.pkgname).await;
             (pkg, srcinfo)
         })
         // Remove any None values from the list - these are where the aurweb
@@ -285,13 +307,16 @@ pub async fn check_devel_updates_online() -> Result<(Vec<DevelUpdate>, DevelUpda
 /// ```no_run
 /// # use arch_updates_rs::*;
 /// # async {
-/// let (online, cache) = check_devel_updates_online().await.unwrap();
+/// let (online, cache) = check_devel_updates_online("app_name/app_ver")
+///     .await
+///     .unwrap();
 /// let offline = check_devel_updates_offline(&cache).await.unwrap();
 /// assert_eq!(online, offline);
 /// // Run `paru -Syu` in the terminal
 /// let offline = check_devel_updates_offline(&cache).await.unwrap();
 /// assert!(offline.is_empty());
 /// # };
+/// ```
 pub async fn check_devel_updates_offline(cache: &DevelUpdatesCache) -> Result<Vec<DevelUpdate>> {
     let devel_packages = get_devel_packages().await?;
     let devel_updates = devel_packages
@@ -323,18 +348,31 @@ pub async fn check_devel_updates_offline(cache: &DevelUpdatesCache) -> Result<Ve
 /// # Notes
 ///  - Locally installed packages that aren't in the AUR are currently not
 ///    implemented and may return an error.
+///  - Due to the AUR using [Anubis](https://anubis.techaro.lol/) for bot protection,
+///    a user agent is required or this function will error. See the [MDN](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/User-Agent)
+///    for more information on User Agents. Cargo environment variables can be
+///    used to generate a user agent based on your Cargo.toml: `let user_agent =
+///    concat!(env!("CARGO_PKG_NAME"),"/",env!("CARGO_PKG_VERSION"))`
 /// # Usage
 /// ```no_run
 /// # use arch_updates_rs::*;
 /// # async {
-/// let (updates, _) = check_aur_updates_online().await.unwrap();
+/// let (updates, _) = check_aur_updates_online("app_name/app_ver").await.unwrap();
 /// // Run `paru -Syu` in the terminal
-/// let (updates, _) = check_aur_updates_online().await.unwrap();
+/// let (updates, _) = check_aur_updates_online("app_name/app_ver").await.unwrap();
 /// assert!(updates.is_empty());
 /// # };
-pub async fn check_aur_updates_online() -> Result<(Vec<AurUpdate>, AurUpdatesCache)> {
+/// ```
+pub async fn check_aur_updates_online(
+    user_agent: &str,
+) -> Result<(Vec<AurUpdate>, AurUpdatesCache)> {
     let old = get_aur_packages().await?;
-    let aur = raur::Handle::new();
+    let client = reqwest::Client::builder()
+        .user_agent(user_agent)
+        .build()
+        // Panicking on client build failure matches standard behaviour of raur::Handle::new()
+        .unwrap();
+    let aur = raur::Handle::new_with_client(client.clone());
     let cache: Vec<AurUpdate> = aur
         .info(
             old.iter()
@@ -380,7 +418,7 @@ pub async fn check_aur_updates_online() -> Result<(Vec<AurUpdate>, AurUpdatesCac
 /// ```no_run
 /// # use arch_updates_rs::*;
 /// # async {
-/// let (online, cache) = check_aur_updates_online().await.unwrap();
+/// let (online, cache) = check_aur_updates_online("app_name/app_ver").await.unwrap();
 /// let offline = check_aur_updates_offline(&cache).await.unwrap();
 /// assert_eq!(online, offline);
 /// // Run `paru -Syu` in the terminal
@@ -436,6 +474,13 @@ mod tests {
         check_devel_updates_online, check_pacman_updates_offline, check_pacman_updates_online,
     };
 
+    const TEST_USER_AGENT: &str = concat!(
+        env!("CARGO_PKG_NAME"),
+        "/",
+        env!("CARGO_PKG_VERSION"),
+        " (tests)"
+    );
+
     #[tokio::test]
     async fn test_check_pacman_updates() {
         let (online, cache) = check_pacman_updates_online().await.unwrap();
@@ -444,14 +489,14 @@ mod tests {
     }
     #[tokio::test]
     async fn test_check_aur_updates() {
-        let (online, cache) = check_aur_updates_online().await.unwrap();
+        let (online, cache) = check_aur_updates_online(TEST_USER_AGENT).await.unwrap();
         let offline = check_aur_updates_offline(&cache).await.unwrap();
         assert_eq!(online, offline);
         eprintln!("aur {:#?}", online);
     }
     #[tokio::test]
     async fn test_check_devel_updates() {
-        let (online, cache) = check_devel_updates_online().await.unwrap();
+        let (online, cache) = check_devel_updates_online(TEST_USER_AGENT).await.unwrap();
         let offline = check_devel_updates_offline(&cache).await.unwrap();
         assert_eq!(online, offline);
         eprintln!("devel {:#?}", online);

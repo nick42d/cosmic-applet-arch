@@ -161,11 +161,11 @@ pub async fn get_devel_packages() -> Result<Vec<Package>> {
 }
 
 /// Get and parse the .SRCINFO for an package, if its in the AUR.
-pub async fn get_aur_srcinfo(pkgname: &str) -> Result<Option<Srcinfo>> {
+pub async fn get_aur_srcinfo(client: reqwest::Client, pkgname: &str) -> Result<Option<Srcinfo>> {
+    let aur = raur::Handle::new_with_client(client.clone());
     // First we need to get the base repository from the AUR API. Since the pkgname
     // may not be the same as the repository name (and repository can contain
     // multiple packages).
-    let aur = raur::Handle::new();
     let Some(ref info) = aur
         .info(&[&pkgname])
         .await
@@ -178,7 +178,7 @@ pub async fn get_aur_srcinfo(pkgname: &str) -> Result<Option<Srcinfo>> {
     let base = &info.package_base;
 
     let url = format!("https://aur.archlinux.org/cgit/aur.git/plain/.SRCINFO?h={base}");
-    let raw = reqwest::get(url).await?.text().await?;
+    let raw = client.get(url).send().await?.text().await?;
     // The pkg.pkgname field of the .SRCINO is not likely to be populated, but we'll
     // need it for later parsing, so we populate it ourself.
     let mut srcinfo = Srcinfo::from_str(&raw)?;
@@ -299,7 +299,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_srcinfo() {
-        get_aur_srcinfo("hyprlang-git").await.unwrap();
+        let client = reqwest::Client::builder()
+            .user_agent(concat!(
+                env!("CARGO_PKG_NAME"),
+                "_tests/",
+                env!("CARGO_PKG_VERSION")
+            ))
+            .build()
+            .unwrap();
+        get_aur_srcinfo(client, "hyprlang-git").await.unwrap();
     }
     #[tokio::test]
     async fn test_checkupdates_sync() {
@@ -320,18 +328,48 @@ mod tests {
     }
     #[tokio::test]
     async fn test_get_srcinfo_not_in_aur() {
-        let output = get_aur_srcinfo("made-up-package").await.unwrap();
+        let client = reqwest::Client::builder()
+            .user_agent(concat!(
+                env!("CARGO_PKG_NAME"),
+                "_tests/",
+                env!("CARGO_PKG_VERSION")
+            ))
+            .build()
+            .unwrap();
+        let output = get_aur_srcinfo(client, "made-up-package").await.unwrap();
         assert!(output.is_none());
     }
     #[tokio::test]
     async fn test_get_url() {
-        let srcinfo = get_aur_srcinfo("hyprlang-git").await.unwrap().unwrap();
+        let client = reqwest::Client::builder()
+            .user_agent(concat!(
+                env!("CARGO_PKG_NAME"),
+                "_tests/",
+                env!("CARGO_PKG_VERSION")
+            ))
+            .build()
+            .unwrap();
+        let srcinfo = get_aur_srcinfo(client, "hyprlang-git")
+            .await
+            .unwrap()
+            .unwrap();
         let url = srcinfo.base.source.all().next().unwrap();
         parse_url(url).unwrap();
     }
     #[tokio::test]
     async fn test_get_head() {
-        let srcinfo = get_aur_srcinfo("hyprutils-git").await.unwrap().unwrap();
+        let client = reqwest::Client::builder()
+            .user_agent(concat!(
+                env!("CARGO_PKG_NAME"),
+                "_tests/",
+                env!("CARGO_PKG_VERSION")
+            ))
+            .build()
+            .unwrap();
+        let srcinfo = get_aur_srcinfo(client, "hyprutils-git")
+            .await
+            .unwrap()
+            .unwrap();
         let url = srcinfo.base.source.all().next().unwrap();
         let url_parsed = parse_url(url).unwrap();
         get_head_identifier(url_parsed.remote, url_parsed.branch)

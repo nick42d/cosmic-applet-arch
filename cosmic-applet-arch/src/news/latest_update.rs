@@ -125,8 +125,7 @@ async fn get_latest_pacman_update(
         .context("Error reading pacman log")?;
     let Some(last_update_line) = log
         .lines()
-        .filter(|line| line.contains("starting full system upgrade"))
-        .next_back()
+        .rfind(|line| line.contains("starting full system upgrade"))
     else {
         return Ok(None);
     };
