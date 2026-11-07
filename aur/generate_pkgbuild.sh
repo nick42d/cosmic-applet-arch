@@ -34,10 +34,13 @@ makedepends=(
   cargo
   git
   just
-  lld
+  mold
+  clang
 )
 source=(git+https://github.com/nick42d/cosmic-applet-arch.git#tag=\${pkgname}/v\${pkgver})
 b2sums=('tbc')
+# aws-lc-sys dependency fails to build with LTO enabled
+options=('!lto')
 
 prepare() {
   cd cosmic-applet-arch
@@ -47,7 +50,7 @@ prepare() {
 
 build() {
   cd cosmic-applet-arch
-  RUSTFLAGS+=" -C link-arg=-fuse-ld=lld"
+  RUSTFLAGS+=" -C link-arg=-fuse-ld=mold"
   just build-release --frozen
 }
 
