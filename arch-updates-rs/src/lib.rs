@@ -53,6 +53,7 @@ use raur::Raur;
 use source_repo::{add_sources_to_updates, get_sources_list, SourcesList};
 use std::io;
 use std::str::Utf8Error;
+use std::sync::Arc;
 use thiserror::Error;
 use tokio::process::Command;
 
@@ -235,11 +236,16 @@ pub async fn check_devel_updates_online(
     user_agent: &str,
 ) -> Result<(Vec<DevelUpdate>, DevelUpdatesCache)> {
     let arch = get_arch().await?;
+    // This allocation isn't ideal, but I've been unable to figure out how to share
+    // the user_agent with each element of the stream and I keep running into
+    // lifetime issues.
+    let user_agent: Arc<str> = Arc::from(user_agent);
     let devel_packages = get_devel_packages().await?;
     let devel_updates = futures::stream::iter(devel_packages)
+        .zip(futures::stream::repeat(user_agent.clone()))
         // Get the SRCINFO for each package (as Result<Option<_>>).
-        .then(|pkg| async move {
-            let srcinfo = get_aur_srcinfo(user_agent, &pkg.pkgname).await;
+        .then(|(pkg, user_agent)| async move {
+            let srcinfo = get_aur_srcinfo(&user_agent, &pkg.pkgname).await;
             (pkg, srcinfo)
         })
         // Remove any None values from the list - these are where the aurweb
@@ -495,5 +501,15 @@ mod tests {
         let offline = check_devel_updates_offline(&cache).await.unwrap();
         assert_eq!(online, offline);
         eprintln!("devel {:#?}", online);
+    }
+    #[test]
+    // As the key functions are async it's unknown if they are Send or not without
+    // performing a test like this, it would be a regression for some users if this
+    // failed.
+    fn test_futures_are_send() {
+        fn assert_send<T: Send>(_: T) {}
+        assert_send(check_pacman_updates_online());
+        assert_send(check_aur_updates_online(TEST_USER_AGENT));
+        assert_send(check_devel_updates_online(TEST_USER_AGENT));
     }
 }
