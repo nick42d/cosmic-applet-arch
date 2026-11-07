@@ -14,6 +14,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - add user agent to AUR calls ([#94](https://github.com/nick42d/cosmic-applet-arch/pull/94))
 
 ### Other
+- release ([#87](https://github.com/nick42d/cosmic-applet-arch/pull/87))
+- Update deps
+
+
+
+
+## [1.1.2](https://github.com/nick42d/cosmic-applet-arch/compare/cosmic-applet-arch/v1.1.1...cosmic-applet-arch/v1.1.2) - 2026-11-07
+
+### Fixed
+- add user agent to AUR calls ([#94](https://github.com/nick42d/cosmic-applet-arch/pull/94))
+
+### Other
 - Update deps
 
 
