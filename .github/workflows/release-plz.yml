@@ -15,6 +15,9 @@ jobs:
   release-plz-release:
     name: Release-plz release
     runs-on: ubuntu-latest
+    outputs:
+      applet_released: ${{ steps.check_applet_release.outputs.applet_released }}
+      applet_version: ${{ steps.check_applet_release.outputs.applet_version }}
     steps:
       # Generating a GitHub token, so that PRs and tags created by
       # the release-plz-action can trigger actions workflows.
@@ -56,13 +59,21 @@ jobs:
              echo "released version: $APPLET_VERSION"
              echo "applet_version=$APPLET_VERSION" >> "$GITHUB_OUTPUT"
           fi
+
+  # Publish to AUR is split from release-plz-release to ensure it's seperately retriable and env vars aren't polluted from previous steps.
+  publish-aur:
+    name: Publish to AUR
+    needs: release-plz-release
+    if: ${{ needs.release-plz-release.outputs.applet_released == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
       - name: Generate PKGBUILD
-        if: ${{ steps.check_applet_release.outputs.applet_released == 'true' }}
         env:
-          NEW_APPLET_VERSION: ${{ steps.check_applet_release.outputs.applet_version }}
-        run: ./aur/generate_pkgbuild.sh $NEW_APPLET_VERSION
+          NEW_APPLET_VERSION: ${{ needs.release-plz-release.outputs.applet_version }}
+        run: ./aur/generate_pkgbuild.sh "$NEW_APPLET_VERSION"
       - name: Publish AUR package
-        if: ${{ steps.check_applet_release.outputs.applet_released == 'true' }}
         uses: KSXGitHub/github-actions-deploy-aur@v4.2.0
         with:
           pkgname: cosmic-applet-arch
